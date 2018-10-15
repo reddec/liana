@@ -174,7 +174,7 @@ func generateTypeSchema(file *atool.File, param *atool.Arg, sw *swagger) Schema 
 	} else if tp, err := file.ExtractType(param.Type); err == nil {
 		typeName := strings.Replace(strings.Replace(strings.Replace(tp.File.Import+"_"+tp.Name, "/", "_", -1), "-", "_", -1), ".", "_", -1)
 		typeName = snaker.SnakeToCamel(typeName)
-		sh.Ref = "$/definitions/" + typeName
+		sh.Ref = "#/definitions/" + typeName
 		sw.Definitions[typeName] = generateStructDefinition(tp, sw)
 	} else {
 		sh.Type = "object"
