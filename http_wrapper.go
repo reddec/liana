@@ -82,19 +82,17 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			out.Type().Id(argType).StructFunc(func(group *jen.Group) {
 				for _, param := range method.In {
 					tagName := snaker.CamelToSnake(param.Name)
+					qualType := jen.Id(param.GolangType())
 
 					st, err := f.ExtractType(param.Type)
-					if err != nil {
-						panic(err)
-					}
-					qualType := jen.Id(param.GolangType())
-					if st.File.Import != "" {
+					if err == nil && st.File.Import != "" {
 						_, name := param.GoPkgType()
 						qualType = jen.Qual(st.File.Import, name)
 						if param.IsPointer() {
 							qualType = jen.Op("*").Add(qualType)
 						}
 					}
+					//TODO: think what to do if type can't be extracted (like type-alias)
 					group.Id(strings.Title(param.Name)).Add(qualType).Tag(map[string]string{
 						"json":  tagName,
 						"form":  tagName,

@@ -1,0 +1,166 @@
+swagger: "2.0"
+info:
+  version: "1.0"
+  title: AdService
+basePath: /
+paths:
+  /args-with-error:
+    post:
+      operationId: ArgsWithError
+      consumes:
+      - application/json
+      parameters:
+      - in: body
+        name: request
+        description: Request params
+        required: true
+        schema:
+          $ref: '#/definitions/ArgsWithErrorParams'
+      responses:
+        204:
+          description: Success
+        400:
+          description: Request data contains invalid symbols
+          schema:
+            type: string
+        500:
+          description: Failed to process request by the handler
+          schema:
+            type: string
+  /args-with-result:
+    post:
+      operationId: ArgsWithResult
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: request
+        description: Request params
+        required: true
+        schema:
+          $ref: '#/definitions/ArgsWithResultParams'
+      responses:
+        200:
+          description: Success
+          schema:
+            type: integer
+        400:
+          description: Request data contains invalid symbols
+          schema:
+            type: string
+        500:
+          description: Failed to process request by the handler
+          schema:
+            type: string
+  /args-without-result:
+    post:
+      operationId: ArgsWithoutResult
+      consumes:
+      - application/json
+      parameters:
+      - in: body
+        name: request
+        description: Request params
+        required: true
+        schema:
+          $ref: '#/definitions/ArgsWithoutResultParams'
+      responses:
+        204:
+          description: Success
+        400:
+          description: Request data contains invalid symbols
+          schema:
+            type: string
+  /error-without-args:
+    post:
+      operationId: ErrorWithoutArgs
+      responses:
+        204:
+          description: Success
+        500:
+          description: Failed to process request by the handler
+          schema:
+            type: string
+  /ping:
+    post:
+      summary: Simple check availablility
+      operationId: Ping
+      responses:
+        204:
+          description: Success
+  /result-without-args:
+    post:
+      operationId: ResultWithoutArgs
+      produces:
+      - application/json
+      responses:
+        200:
+          description: Success
+          schema:
+            type: integer
+        500:
+          description: Failed to process request by the handler
+          schema:
+            type: string
+definitions:
+  Ad:
+    type: object
+    properties:
+      Description:
+        type: string
+      ID:
+        type: integer
+      Location:
+        type: string
+  ArgsWithErrorParams:
+    type: object
+    properties:
+      ad:
+        $ref: $/definitions/Ad
+      data:
+        $ref: '#/definitions/Base64'
+      duration:
+        type: object
+      stamp:
+        $ref: '#/definitions/RFC3339'
+      value:
+        $ref: '#/definitions/Decimal'
+      x:
+        type: integer
+      "y":
+        type: integer
+      z:
+        type: integer
+  ArgsWithResultParams:
+    type: object
+    properties:
+      x:
+        type: integer
+      "y":
+        type: integer
+      z:
+        type: integer
+  ArgsWithoutResultParams:
+    type: object
+    properties:
+      x:
+        type: integer
+      "y":
+        type: integer
+      z:
+        type: integer
+  Base64:
+    type: string
+    format: base64
+    description: Base64 encoded byte array
+    example: U3dhZ2dlciByb2Nrcw==
+  Decimal:
+    type: string
+    description: decimal number with up to 254 symbols after floating point
+    example: "123.456"
+  RFC3339:
+    type: string
+    description: RFC3339 time with optional nanoseconds and timezone
+    example: "2018-10-15T21:59:13.915939243+08:00"
