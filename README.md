@@ -1,7 +1,7 @@
 
 # Liana
 
-Tool to generate HTTP wrapper as golang code.
+Tool to generate HTTP wrapper as golang code. Expose your own/legacy code as HTTP API without changes.
 
 Supports CLI mode and as a library.
 
