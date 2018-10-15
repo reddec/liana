@@ -50,9 +50,10 @@ type response struct {
 }
 
 type Schema struct {
-	Type   string `yaml:"type,omitempty"`
-	Ref    string `yaml:"$ref,omitempty"`
-	Format string `yaml:"format,omitempty"`
+	Type        string `yaml:"type,omitempty"`
+	Ref         string `yaml:"$ref,omitempty"`
+	Format      string `yaml:"format,omitempty"`
+	Description string `yaml:"description,omitempty"`
 }
 
 type Definition struct {
@@ -143,17 +144,6 @@ func generateParamsDefinition(file *atool.File, tp *atool.Method, sw *swagger) D
 	return def
 }
 
-func generateResponseDefinition(file *atool.File, tp *atool.Method, sw *swagger) Definition {
-	var def Definition
-	def.Type = "object"
-	def.Properties = make(map[string]Schema)
-
-	for _, param := range tp.NonErrorOutputs() {
-		def.Properties[param.Name] = generateTypeSchema(file, param, sw)
-	}
-	return def
-}
-
 func generateTypeSchema(file *atool.File, param *atool.Arg, sw *swagger) Schema {
 	var sh Schema
 	if param.IsString() {
@@ -179,6 +169,9 @@ func generateTypeSchema(file *atool.File, param *atool.Arg, sw *swagger) Schema 
 	} else {
 		sh.Type = "object"
 	}
+	if sh.Ref == "" {
+		sh.Description = strings.TrimSpace(param.Comment)
+	}
 	return sh
 }
 
@@ -186,10 +179,11 @@ func generateStructDefinition(st *atool.Struct, sw *swagger) Definition {
 	var def Definition
 	def.Type = "object"
 	def.Properties = make(map[string]Schema)
-
+	def.Description = strings.TrimSpace(st.Comment)
 	for _, f := range st.Fields {
 		if ast.IsExported(f.Name) {
 			def.Properties[f.Name] = generateTypeSchema(st.File, f, sw)
+
 		}
 	}
 	return def

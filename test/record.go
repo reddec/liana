@@ -5,12 +5,14 @@ import (
 	"time"
 )
 
+// Advertisement item
 type Ad struct {
-	ID          int64
-	Location    string
-	Description string
+	ID          int64  // Unique ID of ad
+	Location    string // Post address of AD
+	Description string // Custom description
 }
 
+// Advertisement manager
 type AdService interface {
 	// Simple check availablility
 	Ping()

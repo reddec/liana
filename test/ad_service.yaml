@@ -1,5 +1,6 @@
 swagger: "2.0"
 info:
+  description: Advertisement manager
   version: "1.0"
   title: AdService
 basePath: /
@@ -107,18 +108,22 @@ paths:
 definitions:
   Ad:
     type: object
+    description: Advertisement item
     properties:
       Description:
         type: string
+        description: Custom description
       ID:
         type: integer
+        description: Unique ID of ad
       Location:
         type: string
+        description: Post address of AD
   ArgsWithErrorParams:
     type: object
     properties:
       ad:
-        $ref: $/definitions/Ad
+        $ref: '#/definitions/Ad'
       data:
         $ref: '#/definitions/Base64'
       duration:
