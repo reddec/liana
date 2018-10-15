@@ -1,0 +1,20 @@
+builds:
+- binary: liana
+  main: cmd/liana/main.go
+  goos:
+  - windows
+  - darwin
+  - linux
+  goarch:
+  - amd64
+  - 386
+  - arm64
+archive:
+  format: tar.gz
+nfpm:
+  homepage: https://github.com/reddec/liana
+  description: Tool to generate golang HTTP wrapper around interfaces
+  maintainer: RedDec <owner@reddec.net>
+  license: MIT
+  formats:
+  - deb
