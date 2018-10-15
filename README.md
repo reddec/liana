@@ -1,9 +1,46 @@
-
 # Liana
 
 Tool to generate HTTP wrapper as golang code. Expose your own/legacy code as HTTP API without changes.
 
 Supports CLI mode and as a library.
+
+## Usage
+
+* Install from releases page or by
+
+`go get -u -v github.com/reddec/liana/cmd/...`
+
+* Generate wrapper (will put in the same directory as interfaces.go)
+
+`liana path/to/file/with/interfaces.go`
+
+* (optional) add to go generate
+
+```go
+//go:generate liana path/to/file/with/interfaces.go
+```
+
+### CLI
+
+```
+liana [flags] <source file>
+
+Flags:
+
+  -import string
+        Import path (default is no import)
+  -imports string
+        Additional comma separated imports
+  -out string
+        Output file (default same as file plus .http_wrapper.go)
+  -package string
+        Result package name (default same as file)
+  -swagger-dir string
+        Output file for swaggers (if auto - generates to the same dir as out, empty - disabled) (default "auto")
+```
+
+
+## Description
 
 Each function in interface that exported and contains no more than one non-error output is exported as POST handle.
 
@@ -32,7 +69,7 @@ Tool generates such methods:
 The first method just us `gin.Default()` as parameter for the second method and then returns it. Both methods
 register handlers as described above.
 
-## Example:
+### Example:
 
 
 ```go

@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
+	"github.com/knq/snaker"
 	"github.com/reddec/liana"
 	"io/ioutil"
 	"log"
+	"path/filepath"
 	"strings"
 )
 
@@ -13,6 +15,7 @@ var (
 	imports         = flag.String("imports", "", "Additional comma separated imports")
 	outPackageName  = flag.String("package", "", "Result package name (default same as file)")
 	outFile         = flag.String("out", "", "Output file (default same as file plus .http_wrapper.go)")
+	swaggerDir      = flag.String("swagger-dir", "auto", "Output file for swaggers (if auto - generates to the same dir as out, empty - disabled)")
 )
 
 func main() {
@@ -31,11 +34,12 @@ func main() {
 		addImports = append(addImports, imp)
 	}
 
-	data, err := liana.GenerateInterfacesWrapperHTTP(liana.WrapperParams{
+	result, err := liana.GenerateInterfacesWrapperHTTP(liana.WrapperParams{
 		File:              filePath,
 		InPackagePath:     *inPackageImport,
 		AdditionalImports: addImports,
 		OutPackageName:    *outPackageName,
+		DisableSwagger:    *swaggerDir == "",
 	})
 	if err != nil {
 		panic(err)
@@ -50,8 +54,22 @@ func main() {
 		}
 	}
 
-	err = ioutil.WriteFile(*outFile, []byte(data), 0755)
+	err = ioutil.WriteFile(*outFile, []byte(result.Wrapper), 0755)
 	if err != nil {
 		panic(err)
 	}
+
+	if *swaggerDir == "auto" {
+		*swaggerDir = filepath.Dir(*outFile)
+	}
+
+	if *swaggerDir != "" {
+		for name, sw := range result.Swaggers {
+			err = ioutil.WriteFile(filepath.Join(*swaggerDir, snaker.CamelToSnake(name)+".yaml"), []byte(sw), 0755)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
 }

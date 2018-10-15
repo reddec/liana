@@ -23,11 +23,23 @@
   branch = "master"
   name = "github.com/reddec/astools"
   packages = ["."]
-  revision = "3d1e0dd8dc30365ffb748871cc9ea4137bf9e1cd"
+  revision = "da3f6ad18c0ee069185f7e569b88c0d81f3710b9"
+
+[[projects]]
+  name = "github.com/shopspring/decimal"
+  packages = ["."]
+  revision = "cd690d0c9e2447b1ef2a129a6b7b49077da89b8e"
+  version = "1.1.0"
+
+[[projects]]
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
+  version = "v2.2.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f48ca697ae5689d9fc73f137ac53bcd8d59e53ea071dd24d84e8d1160ddf4e88"
+  inputs-digest = "1a4cb7016777044ef690461b15611c0580c2851518cae9aba439a7b91454b963"
   solver-name = "gps-cdcl"
   solver-version = 1

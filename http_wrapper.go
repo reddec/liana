@@ -6,6 +6,7 @@ import (
 	"github.com/knq/snaker"
 	"github.com/reddec/astools"
 	"go/ast"
+	"gopkg.in/yaml.v2"
 	"path/filepath"
 	"strings"
 )
@@ -17,16 +18,23 @@ type WrapperParams struct {
 	OutPackageName    string   // optional, package name in render (default is same as in file)
 	OutPackagePath    string   // optional, package path in render (default is same as in file). If it is  a same as InPackagePath import will be not used
 	InPackagePath     string   // optional, source file import path (default is a directory name of file)
+	DisableSwagger    bool     // optional, if specified skip generates swagger files for all interfaces found in the file
+}
+
+// Result of generator
+type GenerateResult struct {
+	Wrapper  string            // generate go code
+	Swaggers map[string]string // if not disabled, generated swagger against interfaces names
 }
 
 // Generate golang code that's expose functions defined in a exported interfaces.
 // For each suitable interface Gin wrapper over HTTP POST method is generated, where input parameters can be form fields, json or XML
 // data. Input parameter names are same as input parameters but in a snake case.
 // If function has more then one non-error output it is skipped.
-func GenerateInterfacesWrapperHTTP(params WrapperParams) (string, error) {
+func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error) {
 	f, err := atool.Scan(params.File)
 	if err != nil {
-		return "", err
+		return GenerateResult{}, err
 	}
 
 	InPackagePath := filepath.Dir(params.File)
@@ -44,6 +52,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (string, error) {
 	if f.Package == OutPackageName {
 		OutPackagePath = InPackagePath
 	}
+
+	var result GenerateResult
+	result.Swaggers = make(map[string]string)
 
 	out := jen.NewFilePathName(OutPackagePath, OutPackageName)
 	for _, imp := range params.AdditionalImports {
@@ -136,7 +147,6 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (string, error) {
 					group.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusNoContent"))
 				}
 			})
-
 		}
 
 		out.Line()
@@ -161,14 +171,24 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (string, error) {
 				group.Id("router").Dot("POST").Call(jen.Lit("/"+toKebab(method.Name)), jen.Id("handler").Dot("handle"+method.Name))
 			}
 		})
+
+		if !params.DisableSwagger {
+			sw := generateSwaggerDefinition(f, ifs, wrappedMethods)
+			v, err := yaml.Marshal(sw)
+			if err != nil {
+				return GenerateResult{}, err
+			}
+			result.Swaggers[ifs.Name] = string(v)
+		}
 	}
 
 	buffer := &bytes.Buffer{}
 	err = out.Render(buffer)
 	if err != nil {
-		return "", err
+		return GenerateResult{}, err
 	}
-	return buffer.String(), nil
+	result.Wrapper = buffer.String()
+	return result, nil
 }
 
 func toKebab(v string) string {
