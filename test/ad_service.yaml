@@ -142,7 +142,7 @@ definitions:
     type: object
     properties:
       val:
-        $ref: '#/definitions/NullInt64'
+        $ref: '#/definitions/DatabaseSQLNullint64'
       x:
         type: integer
       "y":
@@ -163,13 +163,22 @@ definitions:
     format: base64
     description: Base64 encoded byte array
     example: U3dhZ2dlciByb2Nrcw==
+  DatabaseSQLNullint64:
+    type: object
+    description: |-
+      NullInt64 represents an int64 that may be null.
+      NullInt64 implements the Scanner interface so
+      it can be used as a scan destination, similar to NullString.
+    properties:
+      Int64:
+        type: integer
+      Valid:
+        type: boolean
+        description: Valid is true if Int64 is not NULL
   Decimal:
     type: string
     description: decimal number with up to 254 symbols after floating point
     example: "123.456"
-  NullInt64:
-    type: integer
-    description: optional integer
   RFC3339:
     type: string
     description: RFC3339 time with optional nanoseconds and timezone

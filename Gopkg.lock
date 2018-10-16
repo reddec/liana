@@ -82,7 +82,7 @@
   branch = "master"
   name = "github.com/reddec/astools"
   packages = ["."]
-  revision = "da3f6ad18c0ee069185f7e569b88c0d81f3710b9"
+  revision = "b5e2c3ee44008c7ed6730af9a1ca307f8e6ce5d0"
 
 [[projects]]
   name = "github.com/shopspring/decimal"
@@ -115,6 +115,12 @@
   version = "v8.18.2"
 
 [[projects]]
+  name = "gopkg.in/guregu/null.v3"
+  packages = ["."]
+  revision = "80515d440932108546bcade467bb7d6968e812e2"
+  version = "v3.4.0"
+
+[[projects]]
   name = "gopkg.in/yaml.v2"
   packages = ["."]
   revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
@@ -123,6 +129,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e543ed64e7fdae1db57911d2bdeb013af04517d664c42b57cb621523ebadebb3"
+  inputs-digest = "312d3337d15632457316628504b7800844d991493316dcb99917037dc4a5d256"
   solver-name = "gps-cdcl"
   solver-version = 1

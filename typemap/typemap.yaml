@@ -1,0 +1,51 @@
+swagger:
+
+  "":
+    "[]byte":
+      alias: "Base64"
+      type: string
+      format: base64
+      description: Base64 encoded byte array
+      example: "U3dhZ2dlciByb2Nrcw=="
+
+  "time":
+    Time:
+      alias: "RFC3339"
+      type: string
+      description: "RFC3339 time with optional nanoseconds and timezone"
+      example: "2018-10-15T21:59:13.915939243+08:00"
+    Duration:
+      type: string
+      description: "duration time with suffixes (ms, s, m, h)"
+      example: "3s"
+
+  "gopkg.in/guregu/null.v3":
+    String:
+      alias: String
+      type: string
+    Int:
+      alias: Integer
+      type: integer
+    Float:
+      alias: Float
+      type: number
+    Bool:
+      alias: Bool
+      type: boolean
+    Time:
+      alias: "RFC3339"
+      type: string
+      description: "RFC3339 time with optional nanoseconds and timezone"
+      example: "2018-10-15T21:59:13.915939243+08:00"
+
+  "github.com/shopspring/decimal":
+    Decimal:
+      alias: "Decimal"
+      type: string
+      description: decimal number with up to 254 symbols after floating point
+      example: "123.456"
+    NullDecimal:
+      alias: "Decimal"
+      type: string
+      description: optional decimal number with up to 254 symbols after floating point
+      example: "123.456"

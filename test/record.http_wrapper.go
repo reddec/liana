@@ -110,11 +110,10 @@ func (h *handlerAdService) handleArgsWithError(gctx *gin.Context) {
 }
 
 type argsArgsWithResultHandler struct {
-	X     int64         `form:"x" json:"x" query:"x" xml:"x"`
-	Y     int64         `form:"y" json:"y" query:"y" xml:"y"`
-	Z     int64         `form:"z" json:"z" query:"z" xml:"z"`
-	X_Val *int64        `form:"val" json:"val" query:"val" xml:"val"`
-	Val   sql.NullInt64 `form:"-" json:"-" query:"-" xml:"-"`
+	X   int64         `form:"x" json:"x" query:"x" xml:"x"`
+	Y   int64         `form:"y" json:"y" query:"y" xml:"y"`
+	Z   int64         `form:"z" json:"z" query:"z" xml:"z"`
+	Val sql.NullInt64 `form:"val" json:"val" query:"val" xml:"val"`
 }
 
 func (h *handlerAdService) handleArgsWithResult(gctx *gin.Context) {
@@ -123,9 +122,6 @@ func (h *handlerAdService) handleArgsWithResult(gctx *gin.Context) {
 		log.Println("[ArgsWithResult]", "failed to parse arguments:", err)
 		gctx.AbortWithError(http.StatusBadRequest, err)
 		return
-	}
-	if params.X_Val != nil {
-		params.Val = sql.NullInt64{*params.X_Val, true}
 	}
 	ret0, ret1 := h.wrap.ArgsWithResult(params.X, params.Y, params.Z, params.Val)
 	if ret1 != nil {
