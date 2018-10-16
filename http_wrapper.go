@@ -32,6 +32,7 @@ type GenerateResult struct {
 // data. Input parameter names are same as input parameters but in a snake case.
 // If function has more then one non-error output it is skipped.
 func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error) {
+
 	f, err := atool.Scan(params.File)
 	if err != nil {
 		return GenerateResult{}, err
@@ -81,24 +82,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			argType := "args" + method.Name + "Handler"
 			out.Type().Id(argType).StructFunc(func(group *jen.Group) {
 				for _, param := range method.In {
-					tagName := snaker.CamelToSnake(param.Name)
-					qualType := jen.Id(param.GolangType())
-
-					st, err := f.ExtractType(param.Type)
-					if err == nil && st.File.Import != "" {
-						_, name := param.GoPkgType()
-						qualType = jen.Qual(st.File.Import, name)
-						if param.IsPointer() {
-							qualType = jen.Op("*").Add(qualType)
-						}
-					}
-					//TODO: think what to do if type can't be extracted (like type-alias)
-					group.Id(strings.Title(param.Name)).Add(qualType).Tag(map[string]string{
-						"json":  tagName,
-						"form":  tagName,
-						"query": tagName,
-						"xml":   tagName,
-					})
+					findRender(param, f).OnStructField(out, group, param, f)
 				}
 			})
 
@@ -115,6 +99,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
 					g.Return()
 				})
+				for _, param := range method.In {
+					findRender(param, f).OnParseField(out, group, param, f)
+				}
 				call := jen.Id("h").Dot("wrap").Dot(method.Name).CallFunc(func(args *jen.Group) {
 					for _, inParam := range method.In {
 						args.Id("params").Dot(strings.Title(inParam.Name))
@@ -189,6 +176,156 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 	return result, nil
 }
 
+type parser struct {
+	ArgType jen.Code
+	Parser  jen.Code
+}
+
+type customArgHandler func(argName *atool.Arg) parser
+
+var argHandlers = map[string]customArgHandler{
+	"database/sql.NullInt64": func(argName *atool.Arg) parser {
+		return parser{
+			ArgType: jen.Op("*").Int64(),
+			Parser: jen.If(jen.Id("params").Dot(argName.Name).Op("!=").Nil()).BlockFunc(func(group *jen.Group) {
+				group.Id("params").Dot("_"+argName.Name).Op(":=").Qual("database/sql", "NullInt64").Values(jen.Op("*").Id("params").Dot(argName.Name), jen.True())
+			}),
+		}
+	},
+}
+
 func toKebab(v string) string {
 	return strings.Replace(snaker.CamelToSnake(v), "_", "-", -1)
+}
+
+var renders = []renderHandler{
+	&sqlHandler{},
+	&defaultRender{},
+}
+
+func findRender(field *atool.Arg, file *atool.File) renderHandler {
+	for _, r := range renders {
+		if r.IsMatch(field, file) {
+			return r
+		}
+	}
+	panic("render not found for field " + field.Name) // should be never ever happen due to default render
+}
+
+type renderHandler interface {
+	IsMatch(field *atool.Arg, file *atool.File) bool
+	OnStructField(out *jen.File, structDefinition *jen.Group, field *atool.Arg, file *atool.File)
+	OnParseField(out *jen.File, methodDefinition *jen.Group, field *atool.Arg, file *atool.File)
+}
+
+type defaultRender struct{}
+
+func (dr *defaultRender) IsMatch(field *atool.Arg, file *atool.File) bool { return true }
+func (dr *defaultRender) OnStructField(out *jen.File, structDefinition *jen.Group, param *atool.Arg, f *atool.File) {
+	tagName := snaker.CamelToSnake(param.Name)
+	qualType := jen.Id(param.GolangType())
+
+	st, err := f.ExtractType(param.Type)
+	if err == nil && st.File.Import != "" {
+		_, name := param.GoPkgType()
+		// as-is
+		qualType = jen.Qual(st.File.Import, name)
+		if param.IsPointer() {
+			qualType = jen.Op("*").Add(qualType)
+		}
+	}
+	//TODO: think what to do if type can't be extracted (like type-alias)
+	structDefinition.Id(strings.Title(param.Name)).Add(qualType).Tag(map[string]string{
+		"json":  tagName,
+		"form":  tagName,
+		"query": tagName,
+		"xml":   tagName,
+	})
+}
+
+// nothing to parse - just use field from structure
+func (dr *defaultRender) OnParseField(out *jen.File, methodDefinition *jen.Group, field *atool.Arg, file *atool.File) {
+}
+
+type sqlHandler struct{}
+
+func (dr *sqlHandler) IsMatch(param *atool.Arg, f *atool.File) bool {
+	st, err := f.ExtractType(param.Type)
+	if err != nil || st.File.Import == "" {
+		return false
+	}
+	_, name := param.GoPkgType()
+
+	switch st.File.Import + "." + name {
+	case "database/sql.NullInt64", "database/sql.NullString", "database/sql.NullFloat64", "database/sql.NullBool":
+		return true
+	case "github.com/lib/pq.NullTime":
+		return true
+	}
+
+	return false
+}
+
+func (dr *sqlHandler) OnStructField(out *jen.File, structDefinition *jen.Group, param *atool.Arg, f *atool.File) {
+	tagName := snaker.CamelToSnake(param.Name)
+
+	st, err := f.ExtractType(param.Type)
+	if err != nil || st.File.Import == "" {
+		panic(err)
+	}
+
+	_, name := param.GoPkgType()
+	var qualType = jen.Op("*")
+	switch name {
+	case "NullInt64":
+		qualType = qualType.Int64()
+	case "NullString":
+		qualType = qualType.String()
+	case "NullFloat64":
+		qualType = qualType.Float64()
+	case "NullBool":
+		qualType = qualType.Bool()
+	case "NullTime":
+		qualType = qualType.Qual("time", "Time")
+	default:
+		panic(name)
+	}
+
+	/*
+		type Data struct {
+			X_Name *string         `json:"name"`
+			Name    sql.NullString `json:"-"`
+		}
+	*/
+	structDefinition.Id("X_" + strings.Title(param.Name)).Add(qualType).Tag(map[string]string{
+		"json":  tagName,
+		"form":  tagName,
+		"query": tagName,
+		"xml":   tagName,
+	})
+
+	qualType = jen.Qual(st.File.Import, st.Name)
+	if param.IsPointer() {
+		qualType = jen.Op("*").Add(qualType)
+	}
+	// 'real value'
+	structDefinition.Id(strings.Title(param.Name)).Add(qualType).Tag(map[string]string{
+		"json":  "-",
+		"form":  "-",
+		"query": "-",
+		"xml":   "-",
+	})
+}
+
+// flip from 'hidden' to real
+func (sq *sqlHandler) OnParseField(out *jen.File, methodDefinition *jen.Group, field *atool.Arg, file *atool.File) {
+	// Name = sql.Null*
+	pkg := "database/sql"
+	_, tp := field.GoPkgType()
+	if tp == "NullTime" {
+		pkg = "github.com/lib/pq"
+	}
+	methodDefinition.If(jen.Id("params").Dot("X_" + strings.Title(field.Name)).Op("!=").Nil()).BlockFunc(func(ifst *jen.Group) {
+		ifst.Id("params").Dot(strings.Title(field.Name)).Op("=").Qual(pkg, tp).Values(jen.Op("*").Id("params").Dot("X_"+strings.Title(field.Name)), jen.True())
+	})
 }

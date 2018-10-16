@@ -1,6 +1,7 @@
 package dbt
 
 import (
+	"database/sql"
 	"github.com/shopspring/decimal"
 	"time"
 )
@@ -21,5 +22,5 @@ type AdService interface {
 
 	ArgsWithoutResult(x, y, z int64)
 	ArgsWithError(x, y, z int64, ad Ad, stamp time.Time, duration time.Duration, value decimal.Decimal, data []byte) error
-	ArgsWithResult(x, y, z int64) (int64, error)
+	ArgsWithResult(x, y, z int64, val sql.NullInt64) (int64, error)
 }

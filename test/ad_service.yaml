@@ -141,6 +141,8 @@ definitions:
   ArgsWithResultParams:
     type: object
     properties:
+      val:
+        $ref: '#/definitions/NullInt64'
       x:
         type: integer
       "y":
@@ -165,6 +167,9 @@ definitions:
     type: string
     description: decimal number with up to 254 symbols after floating point
     example: "123.456"
+  NullInt64:
+    type: integer
+    description: optional integer
   RFC3339:
     type: string
     description: RFC3339 time with optional nanoseconds and timezone
