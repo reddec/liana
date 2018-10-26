@@ -152,6 +152,12 @@ definitions:
   ArgsWithoutResultParams:
     type: object
     properties:
+      arr:
+        type: array
+        items:
+          $ref: '#/definitions/Ad'
+      v:
+        $ref: '#/definitions/Integer'
       x:
         type: integer
       "y":
@@ -179,6 +185,8 @@ definitions:
     type: string
     description: decimal number with up to 254 symbols after floating point
     example: "123.456"
+  Integer:
+    type: integer
   RFC3339:
     type: string
     description: RFC3339 time with optional nanoseconds and timezone

@@ -16,6 +16,7 @@ var (
 	outPackageName  = flag.String("package", "", "Result package name (default same as file)")
 	outFile         = flag.String("out", "", "Output file (default same as file plus .http_wrapper.go)")
 	swaggerDir      = flag.String("swagger-dir", "auto", "Output file for swaggers (if auto - generates to the same dir as out, empty - disabled)")
+	filter          = flag.String("filter", "", "Name of interface to filter (by default - everything)")
 )
 
 func main() {
@@ -33,13 +34,17 @@ func main() {
 		}
 		addImports = append(addImports, imp)
 	}
-
+	var filters []string
+	if *filter != "" {
+		filters = append(filters, *filter)
+	}
 	result, err := liana.GenerateInterfacesWrapperHTTP(liana.WrapperParams{
 		File:              filePath,
 		InPackagePath:     *inPackageImport,
 		AdditionalImports: addImports,
 		OutPackageName:    *outPackageName,
 		DisableSwagger:    *swaggerDir == "",
+		FilterInterfaces:  filters,
 	})
 	if err != nil {
 		panic(err)

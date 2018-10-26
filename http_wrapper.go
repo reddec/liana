@@ -19,6 +19,7 @@ type WrapperParams struct {
 	OutPackagePath    string   // optional, package path in render (default is same as in file). If it is  a same as InPackagePath import will be not used
 	InPackagePath     string   // optional, source file import path (default is a directory name of file)
 	DisableSwagger    bool     // optional, if specified skip generates swagger files for all interfaces found in the file
+	FilterInterfaces  []string //optional, if specified generates only for specified interfaces
 }
 
 // Result of generator
@@ -68,9 +69,26 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		if !ast.IsExported(ifs.Name) {
 			continue
 		}
+		if len(params.FilterInterfaces) > 0 {
+			var ok bool
+			for _, ifn := range params.FilterInterfaces {
+				if ifn == ifs.Name {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
+		}
 		typeName := "handler" + ifs.Name
 		out.Type().Id(typeName).StructFunc(func(group *jen.Group) {
 			group.Id("wrap").Qual(InPackagePath, ifs.Name)
+		})
+		out.Line()
+		clientTypeName := "client" + ifs.Name
+		out.Type().Id(clientTypeName).StructFunc(func(group *jen.Group) {
+			group.Id("baseURL").String().Comment("Base url for requests")
 		})
 		out.Line()
 		var wrappedMethods []*atool.Method
@@ -182,6 +200,34 @@ func toKebab(v string) string {
 
 var renders = []renderHandler{
 	&defaultRender{},
+}
+
+func buildSignature(m *atool.Method, file *atool.File) jen.Code {
+	var params []jen.Code
+
+	for _, in := range m.In {
+		params = append(params, jen.Id(in.Name).Add(getType(in, file)))
+	}
+
+	var out []jen.Code
+	for _, mout := range m.Out {
+		out = append(out, getType(mout, file))
+	}
+	return jen.Params(params...).Parens(jen.List(out...))
+}
+
+func getType(param *atool.Arg, file *atool.File) jen.Code {
+	st, err := file.ExtractType(param.Type)
+	qualType := jen.Id(param.GolangType())
+	if err == nil && st.File.Import != "" {
+		_, name := param.GoPkgType()
+		// as-is
+		qualType = jen.Qual(st.File.Import, name)
+		if param.IsPointer() {
+			qualType = jen.Op("*").Add(qualType)
+		}
+	}
+	return qualType
 }
 
 func findRender(field *atool.Arg, file *atool.File) renderHandler {

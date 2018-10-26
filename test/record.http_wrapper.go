@@ -4,8 +4,10 @@ package dbt
 
 import (
 	"database/sql"
+	"encoding/json"
 	"github.com/gin-gonic/gin"
 	decimal "github.com/shopspring/decimal"
+	nullv3 "gopkg.in/guregu/null.v3"
 	"log"
 	"net/http"
 	"time"
@@ -13,6 +15,10 @@ import (
 
 type handlerAdService struct {
 	wrap AdService
+}
+
+type clientAdService struct {
+	baseURL string // Base url for requests
 }
 
 type argsPingHandler struct{}
@@ -27,6 +33,9 @@ func (h *handlerAdService) handlePing(gctx *gin.Context) {
 	}
 	h.wrap.Ping()
 	gctx.AbortWithStatus(http.StatusNoContent)
+}
+func (h *clientAdService) Ping() {
+	var requestData []byte
 }
 
 type argsErrorWithoutArgsHandler struct{}
@@ -46,6 +55,9 @@ func (h *handlerAdService) handleErrorWithoutArgs(gctx *gin.Context) {
 	}
 	gctx.AbortWithStatus(http.StatusNoContent)
 }
+func (h *clientAdService) ErrorWithoutArgs() error {
+	var requestData []byte
+}
 
 type argsResultWithoutArgsHandler struct{}
 
@@ -64,11 +76,16 @@ func (h *handlerAdService) handleResultWithoutArgs(gctx *gin.Context) {
 	}
 	gctx.IndentedJSON(http.StatusOK, ret0)
 }
+func (h *clientAdService) ResultWithoutArgs() (int64, error) {
+	var requestData []byte
+}
 
 type argsArgsWithoutResultHandler struct {
-	X int64 `form:"x" json:"x" query:"x" xml:"x"`
-	Y int64 `form:"y" json:"y" query:"y" xml:"y"`
-	Z int64 `form:"z" json:"z" query:"z" xml:"z"`
+	X   int64      `form:"x" json:"x" query:"x" xml:"x"`
+	Y   int64      `form:"y" json:"y" query:"y" xml:"y"`
+	Z   int64      `form:"z" json:"z" query:"z" xml:"z"`
+	V   nullv3.Int `form:"v" json:"v" query:"v" xml:"v"`
+	Arr []Ad       `form:"arr" json:"arr" query:"arr" xml:"arr"`
 }
 
 func (h *handlerAdService) handleArgsWithoutResult(gctx *gin.Context) {
@@ -78,8 +95,19 @@ func (h *handlerAdService) handleArgsWithoutResult(gctx *gin.Context) {
 		gctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	h.wrap.ArgsWithoutResult(params.X, params.Y, params.Z)
+	h.wrap.ArgsWithoutResult(params.X, params.Y, params.Z, params.V, params.Arr)
 	gctx.AbortWithStatus(http.StatusNoContent)
+}
+func (h *clientAdService) ArgsWithoutResult(x int64, y int64, z int64, v nullv3.Int, arr []Ad) {
+	var requestData []byte
+	var params argsArgsWithoutResultHandler
+	params.X = x
+	params.Y = y
+	params.Z = z
+	params.V = v
+	params.Arr = arr
+	if d, err := json.MarshalIndent(&params, "", "  "); err != nil {
+	}
 }
 
 type argsArgsWithErrorHandler struct {
@@ -108,6 +136,20 @@ func (h *handlerAdService) handleArgsWithError(gctx *gin.Context) {
 	}
 	gctx.AbortWithStatus(http.StatusNoContent)
 }
+func (h *clientAdService) ArgsWithError(x int64, y int64, z int64, ad Ad, stamp time.Time, duration time.Duration, value decimal.Decimal, data []byte) error {
+	var requestData []byte
+	var params argsArgsWithErrorHandler
+	params.X = x
+	params.Y = y
+	params.Z = z
+	params.Ad = ad
+	params.Stamp = stamp
+	params.Duration = duration
+	params.Value = value
+	params.Data = data
+	if d, err := json.MarshalIndent(&params, "", "  "); err != nil {
+	}
+}
 
 type argsArgsWithResultHandler struct {
 	X   int64         `form:"x" json:"x" query:"x" xml:"x"`
@@ -130,6 +172,16 @@ func (h *handlerAdService) handleArgsWithResult(gctx *gin.Context) {
 		return
 	}
 	gctx.IndentedJSON(http.StatusOK, ret0)
+}
+func (h *clientAdService) ArgsWithResult(x int64, y int64, z int64, val sql.NullInt64) (int64, error) {
+	var requestData []byte
+	var params argsArgsWithResultHandler
+	params.X = x
+	params.Y = y
+	params.Z = z
+	params.Val = val
+	if d, err := json.MarshalIndent(&params, "", "  "); err != nil {
+	}
 }
 
 /*
