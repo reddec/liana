@@ -4,17 +4,18 @@ package dbt
 
 import (
 	"database/sql"
-	"encoding/json"
 	"github.com/gin-gonic/gin"
 	decimal "github.com/shopspring/decimal"
 	nullv3 "gopkg.in/guregu/null.v3"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 )
 
 type handlerAdService struct {
 	wrap AdService
+	lock sync.Locker
 }
 
 type clientAdService struct {
@@ -31,11 +32,10 @@ func (h *handlerAdService) handlePing(gctx *gin.Context) {
 		gctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	h.lock.Lock()
 	h.wrap.Ping()
+	h.lock.Unlock()
 	gctx.AbortWithStatus(http.StatusNoContent)
-}
-func (h *clientAdService) Ping() {
-	var requestData []byte
 }
 
 type argsErrorWithoutArgsHandler struct{}
@@ -47,16 +47,15 @@ func (h *handlerAdService) handleErrorWithoutArgs(gctx *gin.Context) {
 		gctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	h.lock.Lock()
 	ret0 := h.wrap.ErrorWithoutArgs()
+	h.lock.Unlock()
 	if ret0 != nil {
 		log.Println("[ErrorWithoutArgs]", "invoke returned error:", ret0)
 		gctx.AbortWithError(http.StatusInternalServerError, ret0)
 		return
 	}
 	gctx.AbortWithStatus(http.StatusNoContent)
-}
-func (h *clientAdService) ErrorWithoutArgs() error {
-	var requestData []byte
 }
 
 type argsResultWithoutArgsHandler struct{}
@@ -68,16 +67,15 @@ func (h *handlerAdService) handleResultWithoutArgs(gctx *gin.Context) {
 		gctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	h.lock.Lock()
 	ret0, ret1 := h.wrap.ResultWithoutArgs()
+	h.lock.Unlock()
 	if ret1 != nil {
 		log.Println("[ResultWithoutArgs]", "invoke returned error:", ret1)
 		gctx.AbortWithError(http.StatusInternalServerError, ret1)
 		return
 	}
 	gctx.IndentedJSON(http.StatusOK, ret0)
-}
-func (h *clientAdService) ResultWithoutArgs() (int64, error) {
-	var requestData []byte
 }
 
 type argsArgsWithoutResultHandler struct {
@@ -95,19 +93,10 @@ func (h *handlerAdService) handleArgsWithoutResult(gctx *gin.Context) {
 		gctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	h.lock.Lock()
 	h.wrap.ArgsWithoutResult(params.X, params.Y, params.Z, params.V, params.Arr)
+	h.lock.Unlock()
 	gctx.AbortWithStatus(http.StatusNoContent)
-}
-func (h *clientAdService) ArgsWithoutResult(x int64, y int64, z int64, v nullv3.Int, arr []Ad) {
-	var requestData []byte
-	var params argsArgsWithoutResultHandler
-	params.X = x
-	params.Y = y
-	params.Z = z
-	params.V = v
-	params.Arr = arr
-	if d, err := json.MarshalIndent(&params, "", "  "); err != nil {
-	}
 }
 
 type argsArgsWithErrorHandler struct {
@@ -128,27 +117,15 @@ func (h *handlerAdService) handleArgsWithError(gctx *gin.Context) {
 		gctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	h.lock.Lock()
 	ret0 := h.wrap.ArgsWithError(params.X, params.Y, params.Z, params.Ad, params.Stamp, params.Duration, params.Value, params.Data)
+	h.lock.Unlock()
 	if ret0 != nil {
 		log.Println("[ArgsWithError]", "invoke returned error:", ret0)
 		gctx.AbortWithError(http.StatusInternalServerError, ret0)
 		return
 	}
 	gctx.AbortWithStatus(http.StatusNoContent)
-}
-func (h *clientAdService) ArgsWithError(x int64, y int64, z int64, ad Ad, stamp time.Time, duration time.Duration, value decimal.Decimal, data []byte) error {
-	var requestData []byte
-	var params argsArgsWithErrorHandler
-	params.X = x
-	params.Y = y
-	params.Z = z
-	params.Ad = ad
-	params.Stamp = stamp
-	params.Duration = duration
-	params.Value = value
-	params.Data = data
-	if d, err := json.MarshalIndent(&params, "", "  "); err != nil {
-	}
 }
 
 type argsArgsWithResultHandler struct {
@@ -165,23 +142,15 @@ func (h *handlerAdService) handleArgsWithResult(gctx *gin.Context) {
 		gctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	h.lock.Lock()
 	ret0, ret1 := h.wrap.ArgsWithResult(params.X, params.Y, params.Z, params.Val)
+	h.lock.Unlock()
 	if ret1 != nil {
 		log.Println("[ArgsWithResult]", "invoke returned error:", ret1)
 		gctx.AbortWithError(http.StatusInternalServerError, ret1)
 		return
 	}
 	gctx.IndentedJSON(http.StatusOK, ret0)
-}
-func (h *clientAdService) ArgsWithResult(x int64, y int64, z int64, val sql.NullInt64) (int64, error) {
-	var requestData []byte
-	var params argsArgsWithResultHandler
-	params.X = x
-	params.Y = y
-	params.Z = z
-	params.Val = val
-	if d, err := json.MarshalIndent(&params, "", "  "); err != nil {
-	}
 }
 
 /*
@@ -193,15 +162,15 @@ Wrapper of dbt.AdService that expose functions over simple JSON HTTP interface.
  ArgsWithError (POST /args-with-error),
  ArgsWithResult (POST /args-with-result)
 */
-func WrapAdService(wrapper AdService) http.Handler {
+func WrapAdService(wrapper AdService, lock sync.Locker) http.Handler {
 	router := gin.Default()
-	GinWrapAdService(wrapper, router)
+	GinWrapAdService(wrapper, router, lock)
 	return router
 }
 
 // Same as Wrap but allows to use your own Gin instance
-func GinWrapAdService(wrapper AdService, router gin.IRoutes) {
-	handler := handlerAdService{wrapper}
+func GinWrapAdService(wrapper AdService, router gin.IRoutes, lock sync.Locker) {
+	handler := handlerAdService{wrapper, lock}
 	router.POST("/ping", handler.handlePing)
 	router.POST("/error-without-args", handler.handleErrorWithoutArgs)
 	router.POST("/result-without-args", handler.handleResultWithoutArgs)

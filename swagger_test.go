@@ -29,6 +29,7 @@ func Test_generateSwaggerDefinition(t *testing.T) {
 
 func TestGenerateInterfacesWrapperHTTP(t *testing.T) {
 	result, err := GenerateInterfacesWrapperHTTP(WrapperParams{
+		Lock: true,
 		File: "test/record.go",
 	})
 

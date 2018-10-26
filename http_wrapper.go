@@ -20,6 +20,7 @@ type WrapperParams struct {
 	InPackagePath     string   // optional, source file import path (default is a directory name of file)
 	DisableSwagger    bool     // optional, if specified skip generates swagger files for all interfaces found in the file
 	FilterInterfaces  []string //optional, if specified generates only for specified interfaces
+	Lock              bool     //optional, if specified expects global lockable object (global sync)
 }
 
 // Result of generator
@@ -60,10 +61,10 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 
 	out := jen.NewFilePathName(OutPackagePath, OutPackageName)
 	for _, imp := range params.AdditionalImports {
-		out.ImportName(imp, "")
+		out.ImportName(imp, "_")
 	}
 	out.ImportName("github.com/gin-gonic/gin", "gin")
-	out.ImportName(params.InPackagePath, f.Package)
+	out.ImportAlias(params.InPackagePath, f.Package)
 	out.HeaderComment("DO NOT EDIT! This is automatically generated wrapper")
 	for _, ifs := range f.Interfaces {
 		if !ast.IsExported(ifs.Name) {
@@ -84,6 +85,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		typeName := "handler" + ifs.Name
 		out.Type().Id(typeName).StructFunc(func(group *jen.Group) {
 			group.Id("wrap").Qual(InPackagePath, ifs.Name)
+			if params.Lock {
+				group.Id("lock").Qual("sync", "Locker")
+			}
 		})
 		out.Line()
 		clientTypeName := "client" + ifs.Name
@@ -100,7 +104,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			argType := "args" + method.Name + "Handler"
 			out.Type().Id(argType).StructFunc(func(group *jen.Group) {
 				for _, param := range method.In {
-					findRender(param, f).OnStructField(out, group, param, f)
+					findRender(param, f).OnStructField(out, group, param, f, params)
 				}
 			})
 
@@ -120,17 +124,24 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				for _, param := range method.In {
 					findRender(param, f).OnParseField(out, group, param, f)
 				}
+
 				call := jen.Id("h").Dot("wrap").Dot(method.Name).CallFunc(func(args *jen.Group) {
 					for _, inParam := range method.In {
 						args.Id("params").Dot(strings.Title(inParam.Name))
 					}
 				})
+				if params.Lock {
+					group.Id("h").Dot("lock").Dot("Lock").Call()
+				}
 				if method.HasOutput() {
 					group.ListFunc(func(result *jen.Group) {
 						for _, outParam := range method.Out {
 							result.Id(outParam.Name)
 						}
 					}).Op(":=").Add(call)
+					if params.Lock {
+						group.Id("h").Dot("lock").Dot("Unlock").Call()
+					}
 					for _, errOut := range method.ErrorOutputs() {
 						group.If(jen.Id(errOut.Name).Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
 							g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("invoke returned error:"), jen.Id(errOut.Name))
@@ -147,6 +158,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					}
 				} else {
 					group.Add(call)
+					if params.Lock {
+						group.Id("h").Dot("lock").Dot("Unlock").Call()
+					}
 					group.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusNoContent"))
 				}
 			})
@@ -161,15 +175,21 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		}
 		comment += strings.Join(parts, ",\n ")
 		out.Comment(comment)
-		out.Func().Id("Wrap"+ifs.Name).Params(jen.Id("wrapper").Qual(InPackagePath, ifs.Name)).Qual("net/http", "Handler").BlockFunc(func(group *jen.Group) {
+		var subParams jen.Code
+		var subCall jen.Code
+		if params.Lock {
+			subParams = jen.Id("lock").Qual("sync", "Locker")
+			subCall = jen.Id("lock")
+		}
+		out.Func().Id("Wrap"+ifs.Name).Params(jen.Id("wrapper").Qual(InPackagePath, ifs.Name), subParams).Qual("net/http", "Handler").BlockFunc(func(group *jen.Group) {
 			group.Id("router").Op(":=").Qual("github.com/gin-gonic/gin", "Default").Call()
-			group.Id("GinWrap"+ifs.Name).Call(jen.Id("wrapper"), jen.Id("router"))
+			group.Id("GinWrap"+ifs.Name).Call(jen.Id("wrapper"), jen.Id("router"), subCall)
 			group.Return(jen.Id("router"))
 		})
 		out.Line()
 		out.Comment("Same as Wrap but allows to use your own Gin instance")
-		out.Func().Id("GinWrap"+ifs.Name).Params(jen.Id("wrapper").Qual(InPackagePath, ifs.Name), jen.Id("router").Qual("github.com/gin-gonic/gin", "IRoutes")).BlockFunc(func(group *jen.Group) {
-			group.Id("handler").Op(":=").Id(typeName).Values(jen.Id("wrapper"))
+		out.Func().Id("GinWrap"+ifs.Name).Params(jen.Id("wrapper").Qual(InPackagePath, ifs.Name), jen.Id("router").Qual("github.com/gin-gonic/gin", "IRoutes"), subParams).BlockFunc(func(group *jen.Group) {
+			group.Id("handler").Op(":=").Id(typeName).Values(jen.Id("wrapper"), subCall)
 			for _, method := range wrappedMethods {
 				group.Id("router").Dot("POST").Call(jen.Lit("/"+toKebab(method.Name)), jen.Id("handler").Dot("handle"+method.Name))
 			}
@@ -241,14 +261,14 @@ func findRender(field *atool.Arg, file *atool.File) renderHandler {
 
 type renderHandler interface {
 	IsMatch(field *atool.Arg, file *atool.File) bool
-	OnStructField(out *jen.File, structDefinition *jen.Group, field *atool.Arg, file *atool.File)
+	OnStructField(out *jen.File, structDefinition *jen.Group, field *atool.Arg, file *atool.File, params WrapperParams)
 	OnParseField(out *jen.File, methodDefinition *jen.Group, field *atool.Arg, file *atool.File)
 }
 
 type defaultRender struct{}
 
 func (dr *defaultRender) IsMatch(field *atool.Arg, file *atool.File) bool { return true }
-func (dr *defaultRender) OnStructField(out *jen.File, structDefinition *jen.Group, param *atool.Arg, f *atool.File) {
+func (dr *defaultRender) OnStructField(out *jen.File, structDefinition *jen.Group, param *atool.Arg, f *atool.File, params WrapperParams) {
 	tagName := snaker.CamelToSnake(param.Name)
 	qualType := jen.Id(param.GolangType())
 
@@ -260,6 +280,9 @@ func (dr *defaultRender) OnStructField(out *jen.File, structDefinition *jen.Grou
 		if param.IsPointer() {
 			qualType = jen.Op("*").Add(qualType)
 		}
+	} else if err == nil && st.File.Import == "" && params.InPackagePath != "" {
+		_, name := param.GoPkgType()
+		qualType = jen.Qual(params.InPackagePath, name)
 	}
 	//TODO: think what to do if type can't be extracted (like type-alias)
 	structDefinition.Id(strings.Title(param.Name)).Add(qualType).Tag(map[string]string{
