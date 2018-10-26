@@ -125,10 +125,14 @@ func generateTypeSchema(file *atool.File, param *atool.Arg, sw *types.Swagger) *
 		}
 
 		sh.Ref = "#/definitions/" + typeName
-		if def != nil {
-			sw.Definitions[typeName] = &def.Definition
-		} else {
-			sw.Definitions[typeName] = generateStructDefinition(tp, sw)
+		if _, exists := sw.Definitions[typeName]; !exists {
+			if def != nil {
+				sw.Definitions[typeName] = &def.Definition
+			} else {
+				var x *types.Definition
+				sw.Definitions[typeName] = x // forward declaration to prevent infinite cycle
+				sw.Definitions[typeName] = generateStructDefinition(tp, sw)
+			}
 		}
 	} else {
 		sh.Type = "object"

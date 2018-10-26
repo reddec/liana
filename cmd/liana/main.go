@@ -17,6 +17,7 @@ var (
 	outFile         = flag.String("out", "", "Output file (default same as file plus .http_wrapper.go)")
 	swaggerDir      = flag.String("swagger-dir", "auto", "Output file for swaggers (if auto - generates to the same dir as out, empty - disabled)")
 	filter          = flag.String("filter", "", "Name of interface to filter (by default - everything)")
+	sync            = flag.Bool("sync", false, "Use global lock for each call")
 )
 
 func main() {
@@ -44,6 +45,7 @@ func main() {
 		AdditionalImports: addImports,
 		OutPackageName:    *outPackageName,
 		DisableSwagger:    *swaggerDir == "",
+		Lock:              *sync,
 		FilterInterfaces:  filters,
 	})
 	if err != nil {
