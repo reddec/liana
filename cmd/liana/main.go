@@ -18,6 +18,8 @@ var (
 	swaggerDir      = flag.String("swagger-dir", "auto", "Output file for swaggers (if auto - generates to the same dir as out, empty - disabled)")
 	filter          = flag.String("filter", "", "Name of interface to filter (by default - everything)")
 	sync            = flag.Bool("sync", false, "Use global lock for each call")
+	getEmpty        = flag.Bool("get-on-empty", false, "Generates GET handlers for methods without input arguments")
+	getSimple       = flag.Bool("get-on-simple", false, "Generates GET handlers for methods that contains only built-in input arguments")
 )
 
 func main() {
@@ -47,6 +49,8 @@ func main() {
 		DisableSwagger:    *swaggerDir == "",
 		Lock:              *sync,
 		FilterInterfaces:  filters,
+		GetOnEmptyParams:  *getEmpty,
+		GetOnSimpleParams: *getSimple,
 	})
 	if err != nil {
 		panic(err)

@@ -19,8 +19,10 @@ type WrapperParams struct {
 	OutPackagePath    string   // optional, package path in render (default is same as in file). If it is  a same as InPackagePath import will be not used
 	InPackagePath     string   // optional, source file import path (default is a directory name of file)
 	DisableSwagger    bool     // optional, if specified skip generates swagger files for all interfaces found in the file
-	FilterInterfaces  []string //optional, if specified generates only for specified interfaces
-	Lock              bool     //optional, if specified expects global lockable object (global sync)
+	FilterInterfaces  []string // optional, if specified generates only for specified interfaces
+	Lock              bool     // optional, if specified expects global lockable object (global sync)
+	GetOnEmptyParams  bool     // optional, if specified methods without args will be also available over GET method
+	GetOnSimpleParams bool     // optional, if specified methods that contains only simple (built-in) params will be available over GET method with query params
 }
 
 // Result of generator
@@ -88,11 +90,6 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			if params.Lock {
 				group.Id("lock").Qual("sync", "Locker")
 			}
-		})
-		out.Line()
-		clientTypeName := "client" + ifs.Name
-		out.Type().Id(clientTypeName).StructFunc(func(group *jen.Group) {
-			group.Id("baseURL").String().Comment("Base url for requests")
 		})
 		out.Line()
 		var wrappedMethods []*atool.Method
@@ -191,7 +188,25 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		out.Func().Id("GinWrap"+ifs.Name).Params(jen.Id("wrapper").Qual(InPackagePath, ifs.Name), jen.Id("router").Qual("github.com/gin-gonic/gin", "IRoutes"), subParams).BlockFunc(func(group *jen.Group) {
 			group.Id("handler").Op(":=").Id(typeName).Values(jen.Id("wrapper"), subCall)
 			for _, method := range wrappedMethods {
+				var getGenerated bool
 				group.Id("router").Dot("POST").Call(jen.Lit("/"+toKebab(method.Name)), jen.Id("handler").Dot("handle"+method.Name))
+				if params.GetOnEmptyParams && !method.HasInput() {
+					group.Id("router").Dot("GET").Call(jen.Lit("/"+toKebab(method.Name)), jen.Id("handler").Dot("handle"+method.Name))
+					getGenerated = true
+				}
+				if !getGenerated && params.GetOnSimpleParams {
+					var ok = true
+					for _, p := range method.In {
+						if !p.IsSimple() {
+							ok = false
+							break
+						}
+					}
+					if ok {
+						getGenerated = true
+						group.Id("router").Dot("GET").Call(jen.Lit("/"+toKebab(method.Name)), jen.Id("handler").Dot("handle"+method.Name))
+					}
+				}
 			}
 		})
 
