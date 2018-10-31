@@ -25,8 +25,6 @@ Supports CLI mode and as a library.
 ```
 liana [flags] <source file>
 
-Flags:
-
   -filter string
         Name of interface to filter (by default - everything)
   -get-on-empty
@@ -43,6 +41,8 @@ Flags:
         Result package name (default same as file)
   -swagger-dir string
         Output file for swaggers (if auto - generates to the same dir as out, empty - disabled) (default "auto")
+  -swagger-short-names
+        Generates swagger short names for types instead of hashed of package name and type name
   -sync
         Use global lock for each call
 ```
@@ -172,3 +172,32 @@ will generate
 and can be tested on localhost by CURl as
 
     curl "http://localhost/list?limit=100&offset=0"
+
+
+
+### Swagger
+
+If flag `-swagger-dir` is not empty (that's by default) then swagger definition will be generated per each found interface.
+
+Option `-swagger-short-names` allows use in a type names a type names from go without hashed package.
+
+For example:
+
+Type
+
+```golang
+package sample // in github.com/reddec/liana/sample
+
+type Item struct {
+    ID int64
+}
+
+type Store interface {
+    Get() (*Item)
+}
+```
+
+By default `Item` type will be encoded in swagger as `GithubComReddecLianaSampleItem` and gives a guarantees that type
+name is unique.
+
+With flag `-swagger-short-names` it will generates just `Item` that much more readable but may generates collision in names.
