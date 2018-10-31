@@ -27,6 +27,12 @@ liana [flags] <source file>
 
 Flags:
 
+  -filter string
+        Name of interface to filter (by default - everything)
+  -get-on-empty
+        Generates GET handlers for methods without input arguments
+  -get-on-simple
+        Generates GET handlers for methods that contains only built-in input arguments
   -import string
         Import path (default is no import)
   -imports string
@@ -37,6 +43,8 @@ Flags:
         Result package name (default same as file)
   -swagger-dir string
         Output file for swaggers (if auto - generates to the same dir as out, empty - disabled) (default "auto")
+  -sync
+        Use global lock for each call
 ```
 
 
@@ -124,3 +132,43 @@ Response example:
 ```json
 "0xdeadbeaf"
 ```
+
+
+### Methods
+
+By default all methods are wrapped by HTTP POST method, however you can change it for next cases:
+
+1. flag `-get-on-empty` allows Liana to generate additional to POST the HTTP GET methods for functions without input arguments.
+For example:
+
+```golang
+type Store interface {
+    List() ([]string, error)
+}
+```
+
+will generate
+
+   * `POST /list`
+   * `GET  /list`
+
+
+2. flag `-get-on-simple` allows Liana to generate additional to POST the HTTP GET methods for functions with only simple (built-in) arguments.
+In that case, arguments are parsed as HTTP query parameters.
+
+For example:
+
+```golang
+type Store interface {
+    List(limit, offset int) ([]string, error)
+}
+```
+
+will generate
+
+   * `POST /list`
+   * `GET  /list`
+
+and can be tested on localhost by CURl as
+
+    curl "http://localhost/list?limit=100&offset=0"
