@@ -23,6 +23,7 @@ type WrapperParams struct {
 	Lock              bool     // optional, if specified expects global lockable object (global sync)
 	GetOnEmptyParams  bool     // optional, if specified methods without args will be also available over GET method
 	GetOnSimpleParams bool     // optional, if specified methods that contains only simple (built-in) params will be available over GET method with query params
+	UseShortNames     bool     // optional, generate swagger types names shortly without hashed package
 }
 
 // Result of generator
@@ -211,7 +212,8 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		})
 
 		if !params.DisableSwagger {
-			sw := generateSwaggerDefinition(f, ifs, wrappedMethods)
+			usn := swaggerGen{UseShortNames: params.UseShortNames}
+			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
 			v, err := yaml.Marshal(sw)
 			if err != nil {
 				return GenerateResult{}, err

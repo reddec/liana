@@ -10,7 +10,11 @@ import (
 	"strings"
 )
 
-func generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
+type swaggerGen struct {
+	UseShortNames bool
+}
+
+func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
 	var sw types.Swagger
 	sw.Swagger = "2.0"
 	sw.BasePath = "/"
@@ -40,7 +44,7 @@ func generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exporte
 				},
 			})
 
-			sw.Definitions[method.Name+"Params"] = generateParamsDefinition(file, method, &sw)
+			sw.Definitions[method.Name+"Params"] = usn.generateParamsDefinition(file, method, &sw)
 		}
 		if len(method.NonErrorOutputs()) > 0 {
 			act.Produces = append(act.Produces, "application/json")
@@ -70,7 +74,7 @@ func generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exporte
 		} else {
 			act.Responses[http.StatusOK] = types.Response{
 				Description: "Success",
-				Schema:      generateTypeSchema(file, method.NonErrorOutputs()[0], &sw),
+				Schema:      usn.generateTypeSchema(file, method.NonErrorOutputs()[0], &sw),
 			}
 		}
 
@@ -80,17 +84,17 @@ func generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exporte
 	return sw
 }
 
-func generateParamsDefinition(file *atool.File, tp *atool.Method, sw *types.Swagger) *types.Definition {
+func (usn *swaggerGen) generateParamsDefinition(file *atool.File, tp *atool.Method, sw *types.Swagger) *types.Definition {
 	var def types.Definition
 	def.Type = "object"
 	def.Properties = make(map[string]*types.Definition)
 	for _, param := range tp.In {
-		def.Properties[param.Name] = generateTypeSchema(file, param, sw)
+		def.Properties[param.Name] = usn.generateTypeSchema(file, param, sw)
 	}
 	return &def
 }
 
-func generateTypeSchema(file *atool.File, param *atool.Arg, sw *types.Swagger) *types.Definition {
+func (usn *swaggerGen) generateTypeSchema(file *atool.File, param *atool.Arg, sw *types.Swagger) *types.Definition {
 	var sh types.Definition
 	pkg, tpName := param.GoPkgType()
 	if param.IsString() {
@@ -106,13 +110,13 @@ func generateTypeSchema(file *atool.File, param *atool.Arg, sw *types.Swagger) *
 	} else if def := typemap.TypeMap("", tpName); pkg == "" && def != nil {
 		typeName := def.Alias
 		if typeName == "" {
-			typeName = hashTypeName("", tpName)
+			typeName = usn.hashTypeName("", tpName)
 		}
 		sh.Ref = "#/definitions/" + typeName
 		sw.Definitions[typeName] = &def.Definition
 	} else if param.IsArray() {
 		sh.Type = "array"
-		sh.Items = generateTypeSchema(file, param.ArrayItem(), sw)
+		sh.Items = usn.generateTypeSchema(file, param.ArrayItem(), sw)
 	} else if tp, err := file.ExtractType(param.Type); err == nil {
 		def := typemap.TypeMap(tp.File.Import, tp.Name)
 
@@ -121,7 +125,7 @@ func generateTypeSchema(file *atool.File, param *atool.Arg, sw *types.Swagger) *
 			typeName = def.Alias
 		}
 		if typeName == "" {
-			typeName = hashTypeName(tp.File.Import, tp.Name)
+			typeName = usn.hashTypeName(tp.File.Import, tp.Name)
 		}
 
 		sh.Ref = "#/definitions/" + typeName
@@ -131,7 +135,7 @@ func generateTypeSchema(file *atool.File, param *atool.Arg, sw *types.Swagger) *
 			} else {
 				var x *types.Definition
 				sw.Definitions[typeName] = x // forward declaration to prevent infinite cycle
-				sw.Definitions[typeName] = generateStructDefinition(tp, sw)
+				sw.Definitions[typeName] = usn.generateStructDefinition(tp, sw)
 			}
 		}
 	} else {
@@ -143,20 +147,23 @@ func generateTypeSchema(file *atool.File, param *atool.Arg, sw *types.Swagger) *
 	return &sh
 }
 
-func generateStructDefinition(st *atool.Struct, sw *types.Swagger) *types.Definition {
+func (usn *swaggerGen) generateStructDefinition(st *atool.Struct, sw *types.Swagger) *types.Definition {
 	var def types.Definition
 	def.Type = "object"
 	def.Properties = make(map[string]*types.Definition)
 	def.Description = strings.TrimSpace(st.Comment)
 	for _, f := range st.Fields {
 		if ast.IsExported(f.Name) {
-			def.Properties[f.Name] = generateTypeSchema(st.File, f, sw)
+			def.Properties[f.Name] = usn.generateTypeSchema(st.File, f, sw)
 		}
 	}
 	return &def
 }
 
-func hashTypeName(pkg, name string) string {
+func (usn *swaggerGen) hashTypeName(pkg, name string) string {
+	if usn.UseShortNames {
+		return name
+	}
 	typeName := strings.Replace(strings.Replace(strings.Replace(pkg+"_"+name, "/", "_", -1), "-", "_", -1), ".", "_", -1)
 	typeName = snaker.SnakeToCamel(typeName)
 	return strings.Replace(typeName, "*", "", -1)

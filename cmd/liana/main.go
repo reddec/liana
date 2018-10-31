@@ -20,6 +20,7 @@ var (
 	sync            = flag.Bool("sync", false, "Use global lock for each call")
 	getEmpty        = flag.Bool("get-on-empty", false, "Generates GET handlers for methods without input arguments")
 	getSimple       = flag.Bool("get-on-simple", false, "Generates GET handlers for methods that contains only built-in input arguments")
+	swShortNames    = flag.Bool("swagger-short-names", false, "Generates swagger short names for types instead of hashed of package name and type name")
 )
 
 func main() {
@@ -51,6 +52,7 @@ func main() {
 		FilterInterfaces:  filters,
 		GetOnEmptyParams:  *getEmpty,
 		GetOnSimpleParams: *getSimple,
+		UseShortNames:     *swShortNames,
 	})
 	if err != nil {
 		panic(err)
