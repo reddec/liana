@@ -24,6 +24,7 @@ type WrapperParams struct {
 	GetOnEmptyParams  bool     // optional, if specified methods without args will be also available over GET method
 	GetOnSimpleParams bool     // optional, if specified methods that contains only simple (built-in) params will be available over GET method with query params
 	UseShortNames     bool     // optional, generate swagger types names shortly without hashed package
+	BasePath          string   // optional, generate swagger base path (default is '/')
 }
 
 // Result of generator
@@ -212,7 +213,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		})
 
 		if !params.DisableSwagger {
-			usn := swaggerGen{UseShortNames: params.UseShortNames}
+			usn := swaggerGen{UseShortNames: params.UseShortNames, BasePath: params.BasePath}
 			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
 			v, err := yaml.Marshal(sw)
 			if err != nil {

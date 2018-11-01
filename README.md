@@ -43,6 +43,8 @@ liana [flags] <source file>
         Output file for swaggers (if auto - generates to the same dir as out, empty - disabled) (default "auto")
   -swagger-short-names
         Generates swagger short names for types instead of hashed of package name and type name
+  -swagger-base-path string
+        Swagger base path (default "/")
   -sync
         Use global lock for each call
 ```
@@ -201,3 +203,6 @@ By default `Item` type will be encoded in swagger as `GithubComReddecLianaSample
 name is unique.
 
 With flag `-swagger-short-names` it will generates just `Item` that much more readable but may generates collision in names.
+
+
+Base url is by default `/` (root) and can be changed by `-swagger-base-path` flag to any value except empty string.

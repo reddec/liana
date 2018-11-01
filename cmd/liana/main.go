@@ -21,6 +21,7 @@ var (
 	getEmpty        = flag.Bool("get-on-empty", false, "Generates GET handlers for methods without input arguments")
 	getSimple       = flag.Bool("get-on-simple", false, "Generates GET handlers for methods that contains only built-in input arguments")
 	swShortNames    = flag.Bool("swagger-short-names", false, "Generates swagger short names for types instead of hashed of package name and type name")
+	swBasePath      = flag.String("swagger-base-path", "/", "Swagger base path")
 )
 
 func main() {
@@ -53,6 +54,7 @@ func main() {
 		GetOnEmptyParams:  *getEmpty,
 		GetOnSimpleParams: *getSimple,
 		UseShortNames:     *swShortNames,
+		BasePath:          *swBasePath,
 	})
 	if err != nil {
 		panic(err)

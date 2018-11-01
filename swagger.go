@@ -12,12 +12,17 @@ import (
 
 type swaggerGen struct {
 	UseShortNames bool
+	BasePath      string
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
 	var sw types.Swagger
 	sw.Swagger = "2.0"
-	sw.BasePath = "/"
+	if usn.BasePath != "" {
+		sw.BasePath = usn.BasePath
+	} else {
+		sw.BasePath = "/"
+	}
 	sw.Info.Title = iface.Name
 	sw.Info.Description = strings.TrimSpace(iface.Comment)
 	sw.Info.Version = "1.0"
