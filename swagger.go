@@ -7,6 +7,8 @@ import (
 	"github.com/reddec/liana/types"
 	"go/ast"
 	"net/http"
+	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -159,7 +161,11 @@ func (usn *swaggerGen) generateStructDefinition(st *atool.Struct, sw *types.Swag
 	def.Description = strings.TrimSpace(st.Comment)
 	for _, f := range st.Fields {
 		if ast.IsExported(f.Name) {
-			def.Properties[f.Name] = usn.generateTypeSchema(st.File, f, sw)
+			rawTags, _ := strconv.Unquote(f.AsField().Tag.Value)
+			tags := reflect.StructTag(rawTags)
+			if tags.Get("json") != "-" { // skip json excluded tags
+				def.Properties[f.Name] = usn.generateTypeSchema(st.File, f, sw)
+			}
 		}
 	}
 	return &def

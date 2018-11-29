@@ -104,11 +104,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:ace5c37ffabd66de782dd3847c2131bf4b283de170b2bd52ce185f3f19c2fd25"
+  digest = "1:937c2d10a07f51de0e459464afb707e9eabc2fcb8038b2690b8297b5a3080d6a"
   name = "github.com/reddec/astools"
   packages = ["."]
   pruneopts = "UT"
-  revision = "b5e2c3ee44008c7ed6730af9a1ca307f8e6ce5d0"
+  revision = "7e5f0ee451dd35b1a50e67197b4434f99d2b6af8"
 
 [[projects]]
   digest = "1:81e02c4edb639c80559c0650f9401d3e2dcc3256d1fa215382bb7c83c1db9126"
