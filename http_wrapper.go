@@ -300,9 +300,6 @@ func (dr *defaultRender) OnStructField(out *jen.File, structDefinition *jen.Grou
 		name = strings.Replace(name, "*", "", -1)
 		// as-is
 		qualType = jen.Qual(st.File.Import, name)
-		if param.IsPointer() {
-			qualType = jen.Op("*").Add(qualType)
-		}
 	} else if err == nil && st.File.Import == "" && params.InPackagePath != "" {
 		_, name := param.GoPkgType()
 		name = strings.Replace(name, "*", "", -1)
