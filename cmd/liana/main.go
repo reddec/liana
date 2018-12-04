@@ -18,6 +18,7 @@ var (
 	swaggerDir      = flag.String("swagger-dir", "auto", "Output file for swaggers (if auto - generates to the same dir as out, empty - disabled)")
 	filter          = flag.String("filter", "", "Name of interface to filter (by default - everything)")
 	sync            = flag.Bool("sync", false, "Use global lock for each call")
+	urlName         = flag.Bool("url-name", false, "Split CamelCase method name to parts of url")
 	getEmpty        = flag.Bool("get-on-empty", false, "Generates GET handlers for methods without input arguments")
 	getSimple       = flag.Bool("get-on-simple", false, "Generates GET handlers for methods that contains only built-in input arguments")
 	swShortNames    = flag.Bool("swagger-short-names", false, "Generates swagger short names for types instead of hashed of package name and type name")
@@ -55,6 +56,7 @@ func main() {
 		GetOnSimpleParams: *getSimple,
 		UseShortNames:     *swShortNames,
 		BasePath:          *swBasePath,
+		UrlName:           *urlName,
 	})
 	if err != nil {
 		panic(err)

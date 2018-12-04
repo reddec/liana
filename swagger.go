@@ -16,6 +16,7 @@ type swaggerGen struct {
 	UseShortNames bool
 	BasePath      string
 	GetOnEmpty    bool
+	NameURL       bool
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
@@ -90,7 +91,11 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 		} else {
 			pt.Post = &act
 		}
-		sw.Paths["/"+toKebab(method.Name)] = pt
+		path := toKebab(method.Name)
+		if usn.NameURL {
+			path = strings.Replace(path, "-", "/", -1)
+		}
+		sw.Paths["/"+path] = pt
 	}
 	return sw
 }

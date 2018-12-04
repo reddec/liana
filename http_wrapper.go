@@ -25,6 +25,7 @@ type WrapperParams struct {
 	GetOnSimpleParams bool     // optional, if specified methods that contains only simple (built-in) params will be available over GET method with query params
 	UseShortNames     bool     // optional, generate swagger types names shortly without hashed package
 	BasePath          string   // optional, generate swagger base path (default is '/')
+	UrlName           bool     // optional, split method name to parts of url
 }
 
 // Result of generator
@@ -195,9 +196,13 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			group.Id("handler").Op(":=").Id(typeName).Values(jen.Id("wrapper"), subCall)
 			for _, method := range wrappedMethods {
 				var getGenerated bool
-				group.Id("router").Dot("POST").Call(jen.Lit("/"+toKebab(method.Name)), jen.Id("handler").Dot("handle"+method.Name))
+				path := toKebab(method.Name)
+				if params.UrlName {
+					path = strings.Replace(path, "-", "/", -1)
+				}
+				group.Id("router").Dot("POST").Call(jen.Lit("/"+path), jen.Id("handler").Dot("handle"+method.Name))
 				if params.GetOnEmptyParams && !method.HasInput() {
-					group.Id("router").Dot("GET").Call(jen.Lit("/"+toKebab(method.Name)), jen.Id("handler").Dot("handle"+method.Name))
+					group.Id("router").Dot("GET").Call(jen.Lit("/"+path), jen.Id("handler").Dot("handle"+method.Name))
 					getGenerated = true
 				}
 				if !getGenerated && params.GetOnSimpleParams {
@@ -210,14 +215,19 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					}
 					if ok {
 						getGenerated = true
-						group.Id("router").Dot("GET").Call(jen.Lit("/"+toKebab(method.Name)), jen.Id("handler").Dot("handle"+method.Name))
+						group.Id("router").Dot("GET").Call(jen.Lit("/"+path), jen.Id("handler").Dot("handle"+method.Name))
 					}
 				}
 			}
 		})
 
 		if !params.DisableSwagger {
-			usn := swaggerGen{UseShortNames: params.UseShortNames, BasePath: params.BasePath, GetOnEmpty: params.GetOnEmptyParams}
+			usn := swaggerGen{
+				UseShortNames: params.UseShortNames,
+				BasePath:      params.BasePath,
+				GetOnEmpty:    params.GetOnEmptyParams,
+				NameURL:       params.UrlName,
+			}
 			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
 			v, err := yaml.Marshal(sw)
 			if err != nil {
