@@ -26,6 +26,7 @@ type WrapperParams struct {
 	UseShortNames     bool     // optional, generate swagger types names shortly without hashed package
 	BasePath          string   // optional, generate swagger base path (default is '/')
 	UrlName           bool     // optional, split method name to parts of url
+	InterfaceAsTag    bool     // optional, add tag to swagger as interface name
 }
 
 // Result of generator
@@ -227,10 +228,11 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 
 		if !params.DisableSwagger {
 			usn := swaggerGen{
-				UseShortNames: params.UseShortNames,
-				BasePath:      params.BasePath,
-				GetOnEmpty:    params.GetOnEmptyParams,
-				NameURL:       params.UrlName,
+				UseShortNames:  params.UseShortNames,
+				BasePath:       params.BasePath,
+				GetOnEmpty:     params.GetOnEmptyParams,
+				NameURL:        params.UrlName,
+				InterfaceAsTag: params.InterfaceAsTag,
 			}
 			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
 			v, err := yaml.Marshal(sw)

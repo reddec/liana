@@ -21,6 +21,7 @@ type Path struct {
 }
 
 type Action struct {
+	Tags        []string         `yaml:"tags,omitempty"`
 	Summary     string           `yaml:"summary,omitempty"`
 	OperationID string           `yaml:"operationId"`
 	Consumes    []string         `yaml:"consumes,omitempty"`

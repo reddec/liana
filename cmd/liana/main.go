@@ -23,6 +23,7 @@ var (
 	getSimple       = flag.Bool("get-on-simple", false, "Generates GET handlers for methods that contains only built-in input arguments")
 	swShortNames    = flag.Bool("swagger-short-names", false, "Generates swagger short names for types instead of hashed of package name and type name")
 	swBasePath      = flag.String("swagger-base-path", "/", "Swagger base path")
+	InterfaceAsTag  = flag.Bool("interface-tag", false, "Add interface name as tag to swagger definition")
 )
 
 func main() {
@@ -57,6 +58,7 @@ func main() {
 		UseShortNames:     *swShortNames,
 		BasePath:          *swBasePath,
 		UrlName:           *urlName,
+		InterfaceAsTag:    *InterfaceAsTag,
 	})
 	if err != nil {
 		panic(err)

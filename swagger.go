@@ -13,10 +13,11 @@ import (
 )
 
 type swaggerGen struct {
-	UseShortNames bool
-	BasePath      string
-	GetOnEmpty    bool
-	NameURL       bool
+	UseShortNames  bool
+	BasePath       string
+	GetOnEmpty     bool
+	NameURL        bool
+	InterfaceAsTag bool
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
@@ -94,6 +95,9 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 		path := toKebab(method.Name)
 		if usn.NameURL {
 			path = strings.Replace(path, "-", "/", -1)
+		}
+		if usn.InterfaceAsTag {
+			act.Tags = append(act.Tags, iface.Name)
 		}
 		sw.Paths["/"+path] = pt
 	}
