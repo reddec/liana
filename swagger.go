@@ -19,6 +19,7 @@ type swaggerGen struct {
 	NameURL        bool
 	InterfaceAsTag bool
 	PrefixTag      map[string]string
+	EmbeddedURL    string
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
@@ -35,6 +36,23 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 
 	sw.Paths = make(map[string]types.Path)
 	sw.Definitions = make(map[string]*types.Definition)
+	if usn.EmbeddedURL != "" {
+		var pt types.Path
+
+		var act types.Action
+		act.Summary = "Returns YAML swagger API"
+		act.Produces = append(act.Produces, "application/yaml")
+		act.Responses = map[int]types.Response{
+			200: {
+				Description: "Swagger content",
+				Schema: &types.Definition{
+					Type: "string",
+				},
+			},
+		}
+		pt.Get = &act
+		sw.Paths[usn.EmbeddedURL] = pt
+	}
 	for _, method := range exportedMethods {
 
 		var pt types.Path

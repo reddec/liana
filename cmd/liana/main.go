@@ -13,21 +13,22 @@ import (
 )
 
 var (
-	inPackageImport = flag.String("import", "", "Import path (default is no import)")
-	imports         = flag.String("imports", "", "Additional comma separated imports")
-	outPackageName  = flag.String("package", "", "Result package name (default same as file)")
-	outFile         = flag.String("out", "", "Output file (default same as file plus .http_wrapper.go)")
-	swaggerDir      = flag.String("swagger-dir", "auto", "Output file for swaggers (if auto - generates to the same dir as out, empty - disabled)")
-	filter          = flag.String("filter", "", "Name of interface to filter (by default - everything)")
-	sync            = flag.Bool("sync", false, "Use global lock for each call")
-	urlName         = flag.Bool("url-name", false, "Split CamelCase method name to parts of url")
-	getEmpty        = flag.Bool("get-on-empty", false, "Generates GET handlers for methods without input arguments")
-	getSimple       = flag.Bool("get-on-simple", false, "Generates GET handlers for methods that contains only built-in input arguments")
-	swShortNames    = flag.Bool("swagger-short-names", false, "Generates swagger short names for types instead of hashed of package name and type name")
-	swBasePath      = flag.String("swagger-base-path", "/", "Swagger base path")
-	InterfaceAsTag  = flag.Bool("interface-tag", false, "Add interface name as tag to swagger definition")
-	SingleSwagger   = flag.Bool("swagger-single", false, "Use only one swagger and merge all definitions (will be named as swagger.yaml)")
-	GroupTag        = flag.String("group-tag", "", "Comma separated <prefix>=<tag> rule to mark swagger definition")
+	inPackageImport    = flag.String("import", "", "Import path (default is no import)")
+	imports            = flag.String("imports", "", "Additional comma separated imports")
+	outPackageName     = flag.String("package", "", "Result package name (default same as file)")
+	outFile            = flag.String("out", "", "Output file (default same as file plus .http_wrapper.go)")
+	swaggerDir         = flag.String("swagger-dir", "auto", "Output file for swaggers (if auto - generates to the same dir as out, empty - disabled)")
+	filter             = flag.String("filter", "", "Name of interface to filter (by default - everything)")
+	sync               = flag.Bool("sync", false, "Use global lock for each call")
+	urlName            = flag.Bool("url-name", false, "Split CamelCase method name to parts of url")
+	getEmpty           = flag.Bool("get-on-empty", false, "Generates GET handlers for methods without input arguments")
+	getSimple          = flag.Bool("get-on-simple", false, "Generates GET handlers for methods that contains only built-in input arguments")
+	swShortNames       = flag.Bool("swagger-short-names", false, "Generates swagger short names for types instead of hashed of package name and type name")
+	swBasePath         = flag.String("swagger-base-path", "/", "Swagger base path")
+	InterfaceAsTag     = flag.Bool("interface-tag", false, "Add interface name as tag to swagger definition")
+	SingleSwagger      = flag.Bool("swagger-single", false, "Use only one swagger and merge all definitions (will be named as swagger.yaml)")
+	GroupTag           = flag.String("group-tag", "", "Comma separated <prefix>=<tag> rule to mark swagger definition")
+	EmbeddedSwaggerURL = flag.String("embedded-swagger", "", "When specified the swagger definition will be embedded and available over specified URL")
 )
 
 func main() {
@@ -50,20 +51,21 @@ func main() {
 		filters = append(filters, *filter)
 	}
 	result, err := liana.GenerateInterfacesWrapperHTTP(liana.WrapperParams{
-		File:              filePath,
-		InPackagePath:     *inPackageImport,
-		AdditionalImports: addImports,
-		OutPackageName:    *outPackageName,
-		DisableSwagger:    *swaggerDir == "",
-		Lock:              *sync,
-		FilterInterfaces:  filters,
-		GetOnEmptyParams:  *getEmpty,
-		GetOnSimpleParams: *getSimple,
-		UseShortNames:     *swShortNames,
-		BasePath:          *swBasePath,
-		UrlName:           *urlName,
-		InterfaceAsTag:    *InterfaceAsTag,
-		PrefixTag:         stringToMap(*GroupTag),
+		File:               filePath,
+		InPackagePath:      *inPackageImport,
+		AdditionalImports:  addImports,
+		OutPackageName:     *outPackageName,
+		DisableSwagger:     *swaggerDir == "",
+		Lock:               *sync,
+		FilterInterfaces:   filters,
+		GetOnEmptyParams:   *getEmpty,
+		GetOnSimpleParams:  *getSimple,
+		UseShortNames:      *swShortNames,
+		BasePath:           *swBasePath,
+		UrlName:            *urlName,
+		InterfaceAsTag:     *InterfaceAsTag,
+		PrefixTag:          stringToMap(*GroupTag),
+		EmbeddedSwaggerURL: *EmbeddedSwaggerURL,
 	})
 	if err != nil {
 		panic(err)
@@ -94,7 +96,7 @@ func main() {
 				if root == nil {
 					root = sw
 				} else {
-					mergeSwagger(root, sw)
+					liana.MergeSwagger(root, sw)
 				}
 
 			}
@@ -133,10 +135,4 @@ func stringToMap(s string) map[string]string {
 		ans[kv[0]] = kv[1]
 	}
 	return ans
-}
-
-func mergeSwagger(target *types.Swagger, source *types.Swagger) {
-	for url, p := range source.Paths {
-		target.Paths[url] = p
-	}
 }

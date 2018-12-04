@@ -7,27 +7,29 @@ import (
 	"github.com/reddec/astools"
 	"github.com/reddec/liana/types"
 	"go/ast"
+	"gopkg.in/yaml.v2"
 	"path/filepath"
 	"strings"
 )
 
 // Parameters for HTTP wrapper generator
 type WrapperParams struct {
-	File              string            // required, path for source file
-	AdditionalImports []string          // optional, additional imports for result render (almost never should be used)
-	OutPackageName    string            // optional, package name in render (default is same as in file)
-	OutPackagePath    string            // optional, package path in render (default is same as in file). If it is  a same as InPackagePath import will be not used
-	InPackagePath     string            // optional, source file import path (default is a directory name of file)
-	DisableSwagger    bool              // optional, if specified skip generates swagger files for all interfaces found in the file
-	FilterInterfaces  []string          // optional, if specified generates only for specified interfaces
-	Lock              bool              // optional, if specified expects global lockable object (global sync)
-	GetOnEmptyParams  bool              // optional, if specified methods without args will be also available over GET method
-	GetOnSimpleParams bool              // optional, if specified methods that contains only simple (built-in) params will be available over GET method with query params
-	UseShortNames     bool              // optional, generate swagger types names shortly without hashed package
-	BasePath          string            // optional, generate swagger base path (default is '/')
-	UrlName           bool              // optional, split method name to parts of url
-	InterfaceAsTag    bool              // optional, add tag to swagger as interface name
-	PrefixTag         map[string]string // optional, add a tag to swagger if method has prefix
+	File               string            // required, path for source file
+	AdditionalImports  []string          // optional, additional imports for result render (almost never should be used)
+	OutPackageName     string            // optional, package name in render (default is same as in file)
+	OutPackagePath     string            // optional, package path in render (default is same as in file). If it is  a same as InPackagePath import will be not used
+	InPackagePath      string            // optional, source file import path (default is a directory name of file)
+	DisableSwagger     bool              // optional, if specified skip generates swagger files for all interfaces found in the file
+	FilterInterfaces   []string          // optional, if specified generates only for specified interfaces
+	Lock               bool              // optional, if specified expects global lockable object (global sync)
+	GetOnEmptyParams   bool              // optional, if specified methods without args will be also available over GET method
+	GetOnSimpleParams  bool              // optional, if specified methods that contains only simple (built-in) params will be available over GET method with query params
+	UseShortNames      bool              // optional, generate swagger types names shortly without hashed package
+	BasePath           string            // optional, generate swagger base path (default is '/')
+	UrlName            bool              // optional, split method name to parts of url
+	InterfaceAsTag     bool              // optional, add tag to swagger as interface name
+	PrefixTag          map[string]string // optional, add a tag to swagger if method has prefix
+	EmbeddedSwaggerURL string            // optional, when specified the swagger will be generated, merged and included by specified url
 }
 
 // Result of generator
@@ -191,6 +193,21 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			subParams = jen.Id("lock").Qual("sync", "Locker")
 			subCall = jen.Id("lock")
 		}
+
+		if !params.DisableSwagger {
+			usn := swaggerGen{
+				UseShortNames:  params.UseShortNames,
+				BasePath:       params.BasePath,
+				GetOnEmpty:     params.GetOnEmptyParams,
+				NameURL:        params.UrlName,
+				InterfaceAsTag: params.InterfaceAsTag,
+				PrefixTag:      params.PrefixTag,
+				EmbeddedURL:    params.EmbeddedSwaggerURL,
+			}
+			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
+			result.Swaggers[ifs.Name] = &sw
+		}
+
 		out.Func().Id("Wrap"+ifs.Name).Params(jen.Id("wrapper").Qual(InPackagePath, ifs.Name), subParams).Qual("net/http", "Handler").BlockFunc(func(group *jen.Group) {
 			group.Id("router").Op(":=").Qual("github.com/gin-gonic/gin", "Default").Call()
 			group.Id("GinWrap"+ifs.Name).Call(jen.Id("wrapper"), jen.Id("router"), subCall)
@@ -225,20 +242,29 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					}
 				}
 			}
+			if params.EmbeddedSwaggerURL != "" {
+				group.Id("router").Dot("GET").Call(jen.Lit(params.EmbeddedSwaggerURL), jen.Func().Params(jen.Id("gctx").Op("*").Qual("github.com/gin-gonic/gin", "Context")).BlockFunc(func(handler *jen.Group) {
+					handler.Id("gctx").Dot("Data").Call(jen.Qual("net/http", "StatusOK"), jen.Lit("application/yaml"), jen.Index().Byte().Parens(jen.Id("Swagger"+ifs.Name)))
+				}))
+			}
 		})
 
-		if !params.DisableSwagger {
-			usn := swaggerGen{
-				UseShortNames:  params.UseShortNames,
-				BasePath:       params.BasePath,
-				GetOnEmpty:     params.GetOnEmptyParams,
-				NameURL:        params.UrlName,
-				InterfaceAsTag: params.InterfaceAsTag,
-				PrefixTag:      params.PrefixTag,
+		if params.EmbeddedSwaggerURL != "" {
+			var root *types.Swagger
+			for _, sw := range result.Swaggers {
+				if root == nil {
+					root = sw
+				} else {
+					MergeSwagger(root, sw)
+				}
 			}
-			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
-			result.Swaggers[ifs.Name] = &sw
+			data, err := yaml.Marshal(root)
+			if err != nil {
+				return result, err
+			}
+			out.Const().Id("Swagger" + ifs.Name).Op("=").Lit(string(data))
 		}
+
 	}
 
 	buffer := &bytes.Buffer{}
@@ -330,4 +356,10 @@ func (dr *defaultRender) OnStructField(out *jen.File, structDefinition *jen.Grou
 
 // nothing to parse - just use field from structure
 func (dr *defaultRender) OnParseField(out *jen.File, methodDefinition *jen.Group, field *atool.Arg, file *atool.File) {
+}
+
+func MergeSwagger(target *types.Swagger, source *types.Swagger) {
+	for url, p := range source.Paths {
+		target.Paths[url] = p
+	}
 }
