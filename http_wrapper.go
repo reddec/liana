@@ -175,7 +175,11 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		comment := "Wrapper of " + f.Package + "." + ifs.Name + " that expose functions over simple JSON HTTP interface.\n Those methods are wrapped: "
 		var parts []string
 		for _, method := range wrappedMethods {
-			parts = append(parts, method.Name+" (POST /"+toKebab(method.Name)+")")
+			path := toKebab(method.Name)
+			if params.UrlName {
+				path = strings.Replace(path, "-", "/", -1)
+			}
+			parts = append(parts, method.Name+" (POST /"+path+")")
 		}
 		comment += strings.Join(parts, ",\n ")
 		out.Comment(comment)
