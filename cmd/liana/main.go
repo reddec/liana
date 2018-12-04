@@ -27,6 +27,7 @@ var (
 	swBasePath      = flag.String("swagger-base-path", "/", "Swagger base path")
 	InterfaceAsTag  = flag.Bool("interface-tag", false, "Add interface name as tag to swagger definition")
 	SingleSwagger   = flag.Bool("swagger-single", false, "Use only one swagger and merge all definitions (will be named as swagger.yaml)")
+	GroupTag        = flag.String("group-tag", "", "Comma separated <prefix>=<tag> rule to mark swagger definition")
 )
 
 func main() {
@@ -62,6 +63,7 @@ func main() {
 		BasePath:          *swBasePath,
 		UrlName:           *urlName,
 		InterfaceAsTag:    *InterfaceAsTag,
+		PrefixTag:         stringToMap(*GroupTag),
 	})
 	if err != nil {
 		panic(err)
@@ -118,6 +120,19 @@ func main() {
 		}
 	}
 
+}
+
+func stringToMap(s string) map[string]string {
+	pairs := strings.Split(s, ",")
+	ans := make(map[string]string)
+	for _, pair := range pairs {
+		kv := strings.Split(pair, "=")
+		if len(kv) != 2 {
+			continue
+		}
+		ans[kv[0]] = kv[1]
+	}
+	return ans
 }
 
 func mergeSwagger(target *types.Swagger, source *types.Swagger) {

@@ -13,20 +13,21 @@ import (
 
 // Parameters for HTTP wrapper generator
 type WrapperParams struct {
-	File              string   // required, path for source file
-	AdditionalImports []string // optional, additional imports for result render (almost never should be used)
-	OutPackageName    string   // optional, package name in render (default is same as in file)
-	OutPackagePath    string   // optional, package path in render (default is same as in file). If it is  a same as InPackagePath import will be not used
-	InPackagePath     string   // optional, source file import path (default is a directory name of file)
-	DisableSwagger    bool     // optional, if specified skip generates swagger files for all interfaces found in the file
-	FilterInterfaces  []string // optional, if specified generates only for specified interfaces
-	Lock              bool     // optional, if specified expects global lockable object (global sync)
-	GetOnEmptyParams  bool     // optional, if specified methods without args will be also available over GET method
-	GetOnSimpleParams bool     // optional, if specified methods that contains only simple (built-in) params will be available over GET method with query params
-	UseShortNames     bool     // optional, generate swagger types names shortly without hashed package
-	BasePath          string   // optional, generate swagger base path (default is '/')
-	UrlName           bool     // optional, split method name to parts of url
-	InterfaceAsTag    bool     // optional, add tag to swagger as interface name
+	File              string            // required, path for source file
+	AdditionalImports []string          // optional, additional imports for result render (almost never should be used)
+	OutPackageName    string            // optional, package name in render (default is same as in file)
+	OutPackagePath    string            // optional, package path in render (default is same as in file). If it is  a same as InPackagePath import will be not used
+	InPackagePath     string            // optional, source file import path (default is a directory name of file)
+	DisableSwagger    bool              // optional, if specified skip generates swagger files for all interfaces found in the file
+	FilterInterfaces  []string          // optional, if specified generates only for specified interfaces
+	Lock              bool              // optional, if specified expects global lockable object (global sync)
+	GetOnEmptyParams  bool              // optional, if specified methods without args will be also available over GET method
+	GetOnSimpleParams bool              // optional, if specified methods that contains only simple (built-in) params will be available over GET method with query params
+	UseShortNames     bool              // optional, generate swagger types names shortly without hashed package
+	BasePath          string            // optional, generate swagger base path (default is '/')
+	UrlName           bool              // optional, split method name to parts of url
+	InterfaceAsTag    bool              // optional, add tag to swagger as interface name
+	PrefixTag         map[string]string // optional, add a tag to swagger if method has prefix
 }
 
 // Result of generator
@@ -233,6 +234,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				GetOnEmpty:     params.GetOnEmptyParams,
 				NameURL:        params.UrlName,
 				InterfaceAsTag: params.InterfaceAsTag,
+				PrefixTag:      params.PrefixTag,
 			}
 			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
 			result.Swaggers[ifs.Name] = &sw

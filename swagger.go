@@ -18,6 +18,7 @@ type swaggerGen struct {
 	GetOnEmpty     bool
 	NameURL        bool
 	InterfaceAsTag bool
+	PrefixTag      map[string]string
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
@@ -98,6 +99,11 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 		}
 		if usn.InterfaceAsTag {
 			act.Tags = append(act.Tags, iface.Name)
+		}
+		for prefix, tag := range usn.PrefixTag {
+			if strings.HasPrefix(method.Name, prefix) {
+				act.Tags = append(act.Tags, tag)
+			}
 		}
 		sw.Paths["/"+path] = pt
 	}
