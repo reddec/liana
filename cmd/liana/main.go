@@ -4,6 +4,8 @@ import (
 	"flag"
 	"github.com/knq/snaker"
 	"github.com/reddec/liana"
+	"github.com/reddec/liana/types"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"path/filepath"
@@ -24,6 +26,7 @@ var (
 	swShortNames    = flag.Bool("swagger-short-names", false, "Generates swagger short names for types instead of hashed of package name and type name")
 	swBasePath      = flag.String("swagger-base-path", "/", "Swagger base path")
 	InterfaceAsTag  = flag.Bool("interface-tag", false, "Add interface name as tag to swagger definition")
+	SingleSwagger   = flag.Bool("swagger-single", false, "Use only one swagger and merge all definitions (will be named as swagger.yaml)")
 )
 
 func main() {
@@ -83,12 +86,42 @@ func main() {
 	}
 
 	if *swaggerDir != "" {
-		for name, sw := range result.Swaggers {
-			err = ioutil.WriteFile(filepath.Join(*swaggerDir, snaker.CamelToSnake(name)+".yaml"), []byte(sw), 0755)
+		if *SingleSwagger {
+			var root *types.Swagger
+			for _, sw := range result.Swaggers {
+				if root == nil {
+					root = sw
+				} else {
+					mergeSwagger(root, sw)
+				}
+
+			}
+			data, err := yaml.Marshal(root)
 			if err != nil {
 				panic(err)
+			}
+			err = ioutil.WriteFile(filepath.Join(*swaggerDir, "swagger.yaml"), data, 0755)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			for name, sw := range result.Swaggers {
+				data, err := yaml.Marshal(sw)
+				if err != nil {
+					panic(err)
+				}
+				err = ioutil.WriteFile(filepath.Join(*swaggerDir, snaker.CamelToSnake(name)+".yaml"), data, 0755)
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 	}
 
+}
+
+func mergeSwagger(target *types.Swagger, source *types.Swagger) {
+	for url, p := range source.Paths {
+		target.Paths[url] = p
+	}
 }

@@ -5,8 +5,8 @@ import (
 	"github.com/dave/jennifer/jen"
 	"github.com/knq/snaker"
 	"github.com/reddec/astools"
+	"github.com/reddec/liana/types"
 	"go/ast"
-	"gopkg.in/yaml.v2"
 	"path/filepath"
 	"strings"
 )
@@ -31,8 +31,8 @@ type WrapperParams struct {
 
 // Result of generator
 type GenerateResult struct {
-	Wrapper  string            // generate go code
-	Swaggers map[string]string // if not disabled, generated swagger against interfaces names
+	Wrapper  string                    // generate go code
+	Swaggers map[string]*types.Swagger // if not disabled, generated swagger against interfaces names
 }
 
 // Generate golang code that's expose functions defined in a exported interfaces.
@@ -63,7 +63,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 	}
 
 	var result GenerateResult
-	result.Swaggers = make(map[string]string)
+	result.Swaggers = make(map[string]*types.Swagger)
 
 	out := jen.NewFilePathName(OutPackagePath, OutPackageName)
 	for _, imp := range params.AdditionalImports {
@@ -235,11 +235,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				InterfaceAsTag: params.InterfaceAsTag,
 			}
 			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
-			v, err := yaml.Marshal(sw)
-			if err != nil {
-				return GenerateResult{}, err
-			}
-			result.Swaggers[ifs.Name] = string(v)
+			result.Swaggers[ifs.Name] = &sw
 		}
 	}
 
