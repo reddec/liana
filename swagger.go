@@ -15,6 +15,7 @@ import (
 type swaggerGen struct {
 	UseShortNames bool
 	BasePath      string
+	GetOnEmpty    bool
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
@@ -84,8 +85,11 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 				Schema:      usn.generateTypeSchema(file, method.NonErrorOutputs()[0], &sw),
 			}
 		}
-
-		pt.Post = act
+		if len(method.In) == 0 && usn.GetOnEmpty {
+			pt.Get = &act
+		} else {
+			pt.Post = &act
+		}
 		sw.Paths["/"+toKebab(method.Name)] = pt
 	}
 	return sw

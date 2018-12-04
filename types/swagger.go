@@ -16,7 +16,8 @@ type Info struct {
 }
 
 type Path struct {
-	Post Action `yaml:"post"`
+	Post *Action `yaml:"post,omitempty"`
+	Get  *Action `yaml:"get,omitempty"`
 }
 
 type Action struct {

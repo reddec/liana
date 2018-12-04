@@ -217,7 +217,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		})
 
 		if !params.DisableSwagger {
-			usn := swaggerGen{UseShortNames: params.UseShortNames, BasePath: params.BasePath}
+			usn := swaggerGen{UseShortNames: params.UseShortNames, BasePath: params.BasePath, GetOnEmpty: params.GetOnEmptyParams}
 			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
 			v, err := yaml.Marshal(sw)
 			if err != nil {
