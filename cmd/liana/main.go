@@ -30,6 +30,7 @@ var (
 	GroupTag           = flag.String("group-tag", "", "Comma separated <prefix>=<tag> rule to mark swagger definition")
 	EmbeddedSwaggerURL = flag.String("embedded-swagger", "", "When specified the swagger definition will be embedded and available over specified URL")
 	BypassContext      = flag.Bool("bypass-context", false, "Do not parse *context.Context and generate stub for it")
+	AuthPrefixes       = flag.String("auth", "", "Command separated list prefixes which should be restricted by auth")
 )
 
 func main() {
@@ -68,11 +69,11 @@ func main() {
 		PrefixTag:          stringToMap(*GroupTag),
 		EmbeddedSwaggerURL: *EmbeddedSwaggerURL,
 		BypassContext:      *BypassContext,
+		AuthPrefixes:       stringToList(*AuthPrefixes),
 	})
 	if err != nil {
 		panic(err)
 	}
-
 	if *outFile == "" {
 		ext := strings.LastIndex(filePath, ".")
 		if ext == -1 {
@@ -124,6 +125,13 @@ func main() {
 		}
 	}
 
+}
+
+func stringToList(s string) []string {
+	if len(s) == 0 {
+		return nil
+	}
+	return strings.Split(s, ",")
 }
 
 func stringToMap(s string) map[string]string {

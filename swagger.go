@@ -21,6 +21,7 @@ type swaggerGen struct {
 	PrefixTag      map[string]string
 	EmbeddedURL    string
 	BypassContext  bool
+	WrapperParams  WrapperParams
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
@@ -37,6 +38,9 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 
 	sw.Paths = make(map[string]types.Path)
 	sw.Definitions = make(map[string]*types.Definition)
+	if len(usn.WrapperParams.AuthPrefixes) > 0 {
+		usn.WrapperParams.AuthType.SwaggerSecuirty(&sw)
+	}
 	if usn.EmbeddedURL != "" {
 		var pt types.Path
 
@@ -64,6 +68,15 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 				continue
 			}
 			numParsableArgs++
+		}
+		var hasAuth bool
+
+		for _, prefix := range usn.WrapperParams.AuthPrefixes {
+			if strings.HasPrefix(method.Name, prefix) {
+				act.Security = append(act.Security, map[string][]string{usn.WrapperParams.AuthType.SwaggerSecTag(): {}})
+				hasAuth = true
+				break
+			}
 		}
 
 		act.OperationID = method.Name
@@ -94,6 +107,11 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 				Schema: &types.Definition{
 					Type: "string",
 				},
+			}
+		}
+		if hasAuth {
+			act.Responses[http.StatusUnauthorized] = types.Response{
+				Description: "Authentication failed",
 			}
 		}
 		if len(method.ErrorOutputs()) > 0 {
