@@ -229,9 +229,14 @@ func (usn *swaggerGen) generateStructDefinition(st *atool.Struct, sw *types.Swag
 		if ast.IsExported(f.Name) {
 			rawTags, _ := strconv.Unquote(f.AsField().Tag.Value)
 			tags := reflect.StructTag(rawTags)
-			if tags.Get("json") != "-" { // skip json excluded tags
-				def.Properties[f.Name] = usn.generateTypeSchema(st.File, f, sw)
+			if tags.Get("json") == "-" { // skip json excluded tags
+				continue
 			}
+			name := f.Name
+			if tagName := strings.Split(tags.Get("json"), ",")[0]; tagName != "" {
+				name = tagName
+			}
+			def.Properties[name] = usn.generateTypeSchema(st.File, f, sw)
 		}
 	}
 	return &def
