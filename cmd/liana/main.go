@@ -29,6 +29,7 @@ var (
 	SingleSwagger      = flag.Bool("swagger-single", false, "Use only one swagger and merge all definitions (will be named as swagger.yaml)")
 	GroupTag           = flag.String("group-tag", "", "Comma separated <prefix>=<tag> rule to mark swagger definition")
 	EmbeddedSwaggerURL = flag.String("embedded-swagger", "", "When specified the swagger definition will be embedded and available over specified URL")
+	BypassContext      = flag.Bool("bypass-context", false, "Do not parse *context.Context and generate stub for it")
 )
 
 func main() {
@@ -66,6 +67,7 @@ func main() {
 		InterfaceAsTag:     *InterfaceAsTag,
 		PrefixTag:          stringToMap(*GroupTag),
 		EmbeddedSwaggerURL: *EmbeddedSwaggerURL,
+		BypassContext:      *BypassContext,
 	})
 	if err != nil {
 		panic(err)

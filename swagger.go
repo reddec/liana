@@ -20,6 +20,7 @@ type swaggerGen struct {
 	InterfaceAsTag bool
 	PrefixTag      map[string]string
 	EmbeddedURL    string
+	BypassContext  bool
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
@@ -54,13 +55,20 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 		sw.Paths[usn.EmbeddedURL] = pt
 	}
 	for _, method := range exportedMethods {
-
+		var numParsableArgs int
 		var pt types.Path
-
 		var act types.Action
+
+		for _, arg := range method.In {
+			if arg.GolangType() == "context.Context" && usn.BypassContext {
+				continue
+			}
+			numParsableArgs++
+		}
+
 		act.OperationID = method.Name
 		act.Summary = strings.TrimSpace(method.Comment)
-		if method.HasInput() {
+		if numParsableArgs > 0 {
 			act.Consumes = append(act.Consumes, "application/json")
 
 			act.Parameters = append(act.Parameters, types.Param{
@@ -80,7 +88,7 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 		}
 		act.Responses = make(map[int]types.Response)
 
-		if method.HasInput() {
+		if numParsableArgs > 0 {
 			act.Responses[http.StatusBadRequest] = types.Response{
 				Description: "Request data contains invalid symbols",
 				Schema: &types.Definition{
@@ -106,7 +114,7 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 				Schema:      usn.generateTypeSchema(file, method.NonErrorOutputs()[0], &sw),
 			}
 		}
-		if len(method.In) == 0 && usn.GetOnEmpty {
+		if numParsableArgs == 0 && usn.GetOnEmpty {
 			pt.Get = &act
 		} else {
 			pt.Post = &act
@@ -133,6 +141,9 @@ func (usn *swaggerGen) generateParamsDefinition(file *atool.File, tp *atool.Meth
 	def.Type = "object"
 	def.Properties = make(map[string]*types.Definition)
 	for _, param := range tp.In {
+		if param.GolangType() == "context.Context" && usn.BypassContext {
+			continue
+		}
 		def.Properties[param.Name] = usn.generateTypeSchema(file, param, sw)
 	}
 	return &def

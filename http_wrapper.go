@@ -30,6 +30,7 @@ type WrapperParams struct {
 	InterfaceAsTag     bool              // optional, add tag to swagger as interface name
 	PrefixTag          map[string]string // optional, add a tag to swagger if method has prefix
 	EmbeddedSwaggerURL string            // optional, when specified the swagger will be generated, merged and included by specified url
+	BypassContext      bool              // optional, when specified pass do not parse context.Context
 }
 
 // Result of generator
@@ -106,9 +107,14 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			}
 			wrappedMethods = append(wrappedMethods, method)
 			argType := "args" + method.Name + "Handler"
+			var numParsableInArgs int
 			out.Type().Id(argType).StructFunc(func(group *jen.Group) {
 				for _, param := range method.In {
+					if param.GolangType() == "context.Context" && params.BypassContext {
+						continue
+					}
 					findRender(param, f).OnStructField(out, group, param, f, params)
+					numParsableInArgs++
 				}
 			})
 
@@ -126,16 +132,23 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					g.Return()
 				})
 				for _, param := range method.In {
+					if param.GolangType() == "context.Context" && params.BypassContext {
+						continue
+					}
 					findRender(param, f).OnParseField(out, group, param, f)
 				}
 
 				call := jen.Id("h").Dot("wrap").Dot(method.Name).CallFunc(func(args *jen.Group) {
 					for _, inParam := range method.In {
-						var arg = args.Empty()
-						if inParam.IsPointer() {
-							arg = arg.Op("&")
+						if inParam.GolangType() == "context.Context" && params.BypassContext {
+							args.Qual("context", "Background").Call()
+						} else {
+							var arg = args.Empty()
+							if inParam.IsPointer() {
+								arg = arg.Op("&")
+							}
+							arg.Id("params").Dot(strings.Title(inParam.Name))
 						}
-						arg.Id("params").Dot(strings.Title(inParam.Name))
 					}
 				})
 				if params.Lock {
@@ -203,6 +216,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				InterfaceAsTag: params.InterfaceAsTag,
 				PrefixTag:      params.PrefixTag,
 				EmbeddedURL:    params.EmbeddedSwaggerURL,
+				BypassContext:  params.BypassContext,
 			}
 			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
 			result.Swaggers[ifs.Name] = &sw
@@ -223,23 +237,23 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				if params.UrlName {
 					path = strings.Replace(path, "-", "/", -1)
 				}
+				var numParsableParam int
+				var onlySimple = true
+				for _, p := range method.In {
+					if p.GolangType() == "context.Context" && params.BypassContext {
+						continue
+					}
+					numParsableParam++
+					onlySimple = p.IsSimple() && onlySimple
+				}
 				group.Id("router").Dot("POST").Call(jen.Lit("/"+path), jen.Id("handler").Dot("handle"+method.Name))
-				if params.GetOnEmptyParams && !method.HasInput() {
+				if params.GetOnEmptyParams && numParsableParam == 0 {
 					group.Id("router").Dot("GET").Call(jen.Lit("/"+path), jen.Id("handler").Dot("handle"+method.Name))
 					getGenerated = true
 				}
-				if !getGenerated && params.GetOnSimpleParams {
-					var ok = true
-					for _, p := range method.In {
-						if !p.IsSimple() {
-							ok = false
-							break
-						}
-					}
-					if ok {
-						getGenerated = true
-						group.Id("router").Dot("GET").Call(jen.Lit("/"+path), jen.Id("handler").Dot("handle"+method.Name))
-					}
+				if !getGenerated && params.GetOnSimpleParams && onlySimple {
+					getGenerated = true
+					group.Id("router").Dot("GET").Call(jen.Lit("/"+path), jen.Id("handler").Dot("handle"+method.Name))
 				}
 			}
 			if params.EmbeddedSwaggerURL != "" {
