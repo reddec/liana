@@ -142,22 +142,33 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				out.Comment(strings.TrimSpace(method.Comment))
 			}
 			out.Func().Parens(jen.Id("h").Op("*").Id(typeName)).Id("handle" + method.Name).Params(jen.Id("gctx").Op("*").Qual("github.com/gin-gonic/gin", "Context")).BlockFunc(func(group *jen.Group) {
-				group.Var().Id("params").Id(argType)
-				group.List(jen.Id("body"), jen.Err()).Op(":=").Id("gctx").Dot("GetRawData").Call()
-				group.If(jen.Err().Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
-					g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed read body:"), jen.Err())
-					g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
-					g.Return()
-				})
-
-				group.IfFunc(func(ifG *jen.Group) {
-					ifG.Err().Op(":=").Qual("encoding/json", "Unmarshal").Call(jen.Id("body"), jen.Op("&").Id("params"))
-					ifG.Err().Op("!=").Nil()
-				}).BlockFunc(func(g *jen.Group) {
-					g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed to parse arguments:"), jen.Err())
-					g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
-					g.Return()
-				})
+				var needsParse = numParsableInArgs > 0
+				var needsBody = numParsableInArgs > 0
+				if !needsParse && authRequired {
+					for _, auth := range params.AuthType {
+						needsParse = needsParse || auth.NeedsParse()
+						needsBody = needsBody || auth.NeedsBody()
+					}
+				}
+				if needsBody {
+					group.List(jen.Id("body"), jen.Err()).Op(":=").Id("gctx").Dot("GetRawData").Call()
+					group.If(jen.Err().Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
+						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed read body:"), jen.Err())
+						g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+						g.Return()
+					})
+				}
+				if needsParse {
+					group.Var().Id("params").Id(argType)
+					group.IfFunc(func(ifG *jen.Group) {
+						ifG.Err().Op(":=").Qual("encoding/json", "Unmarshal").Call(jen.Id("body"), jen.Op("&").Id("params"))
+						ifG.Err().Op("!=").Nil()
+					}).BlockFunc(func(g *jen.Group) {
+						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed to parse arguments:"), jen.Err())
+						g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+						g.Return()
+					})
+				}
 				for _, param := range method.In {
 					if param.GolangType() == "context.Context" && params.BypassContext {
 						continue

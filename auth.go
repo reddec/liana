@@ -20,6 +20,8 @@ type Auth interface {
 	ValidateRequest(self *jen.Statement, req *jen.Statement, gctx *jen.Statement) jen.Code
 	SwaggerSecurity(sw *types.Swagger)
 	SwaggerSecTag() string
+	NeedsParse() bool
+	NeedsBody() bool
 }
 
 func (a AuthType) Name() string {
@@ -32,6 +34,17 @@ func (a AuthType) Name() string {
 		panic("unknown auth type")
 	}
 }
+
+func (a AuthType) NeedsParse() bool {
+	switch a {
+	case Token:
+		return true
+	default:
+		return false
+	}
+}
+
+func (a AuthType) NeedsBody() bool { return false }
 
 func (a AuthType) GenerateInterface(name string) jen.Code {
 	switch a {
@@ -107,6 +120,8 @@ type AuthApiSignature int
 func (a AuthApiSignature) Name() string {
 	return "SignedToken"
 }
+func (a AuthApiSignature) NeedsBody() bool  { return true }
+func (a AuthApiSignature) NeedsParse() bool { return false }
 
 func (AuthApiSignature) GenerateInterface(name string) jen.Code {
 	return jen.Type().Id(name).InterfaceFunc(func(auth *jen.Group) {
