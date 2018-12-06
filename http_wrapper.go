@@ -169,9 +169,6 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					for _, auth := range params.AuthType {
 						auth.Parse(group)
 					}
-					group.Var().Id("nctx").Qual("context", "Context")
-					group.Var().Id("ok").Bool()
-
 					var authGroup *jen.Statement = group.Empty()
 
 					for i, auth := range params.AuthType {
@@ -179,15 +176,18 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 							authGroup = authGroup.Else()
 						}
 						authGroup = authGroup.IfFunc(func(ifSt *jen.Group) {
-							ifSt.List(jen.Id("nctx"), jen.Id("ok")).Op("=").Add(auth.ValidateRequest(jen.Id("h"), jen.Id("params"), jen.Id("gctx")))
-							ifSt.Op("!").Id("ok")
-						}).BlockFunc(func(ifNotAuth *jen.Group) {
-							ifNotAuth.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("unauthorized request from"), jen.Id("gctx").Dot("Request").Dot("RemoteAddr"))
-							ifNotAuth.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusUnauthorized"))
-							ifNotAuth.Return()
+							ifSt.List(jen.Id("nctx"), jen.Id("ok")).Op(":=").Add(auth.ValidateRequest(jen.Id("h"), jen.Id("params"), jen.Id("gctx")))
+							ifSt.Id("ok")
+						}).BlockFunc(func(ifOk *jen.Group) {
+							ifOk.Id("ctx").Op("=").Id("nctx")
 						})
 					}
-					group.Id("ctx").Op("=").Id("nctx")
+					authGroup.Else().BlockFunc(func(ifNotAuth *jen.Group) {
+						ifNotAuth.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("unauthorized request from"), jen.Id("gctx").Dot("Request").Dot("RemoteAddr"))
+						ifNotAuth.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusUnauthorized"))
+						ifNotAuth.Return()
+					})
+
 				}
 				call := jen.Id("h").Dot("wrap").Dot(method.Name).CallFunc(func(args *jen.Group) {
 					for _, inParam := range method.In {
