@@ -30,7 +30,8 @@ var (
 	GroupTag           = flag.String("group-tag", "", "Comma separated <prefix>=<tag> rule to mark swagger definition")
 	EmbeddedSwaggerURL = flag.String("embedded-swagger", "", "When specified the swagger definition will be embedded and available over specified URL")
 	BypassContext      = flag.Bool("bypass-context", false, "Do not parse *context.Context and generate stub for it")
-	AuthPrefixes       = flag.String("auth", "", "Command separated list prefixes which should be restricted by auth")
+	AuthPrefixes       = flag.String("auth", "", "Comma separated list prefixes which should be restricted by auth")
+	AuthTypes          = flag.String("auth-type", "JWT", "Comma separated list of supported auth types (JWT, Token, SignedToken)")
 )
 
 func main() {
@@ -52,6 +53,19 @@ func main() {
 	if *filter != "" {
 		filters = append(filters, *filter)
 	}
+	var auth []liana.Auth
+	for _, name := range stringToList(*AuthTypes) {
+		switch name {
+		case "JWT":
+			auth = append(auth, liana.JWT)
+		case "Token":
+			auth = append(auth, liana.Token)
+		case "SignedToken":
+			auth = append(auth, liana.AuthApiSignature(0))
+		default:
+			panic("unknown auth type " + name)
+		}
+	}
 	result, err := liana.GenerateInterfacesWrapperHTTP(liana.WrapperParams{
 		File:               filePath,
 		InPackagePath:      *inPackageImport,
@@ -70,6 +84,7 @@ func main() {
 		EmbeddedSwaggerURL: *EmbeddedSwaggerURL,
 		BypassContext:      *BypassContext,
 		AuthPrefixes:       stringToList(*AuthPrefixes),
+		AuthType:           auth,
 	})
 	if err != nil {
 		panic(err)

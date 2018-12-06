@@ -39,7 +39,10 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 	sw.Paths = make(map[string]types.Path)
 	sw.Definitions = make(map[string]*types.Definition)
 	if len(usn.WrapperParams.AuthPrefixes) > 0 {
-		usn.WrapperParams.AuthType.SwaggerSecuirty(&sw)
+		for _, auth := range usn.WrapperParams.AuthType {
+			auth.SwaggerSecurity(&sw)
+		}
+
 	}
 	if usn.EmbeddedURL != "" {
 		var pt types.Path
@@ -73,7 +76,9 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 
 		for _, prefix := range usn.WrapperParams.AuthPrefixes {
 			if strings.HasPrefix(method.Name, prefix) {
-				act.Security = append(act.Security, map[string][]string{usn.WrapperParams.AuthType.SwaggerSecTag(): {}})
+				for _, auth := range usn.WrapperParams.AuthType {
+					act.Security = append(act.Security, map[string][]string{auth.SwaggerSecTag(): {}})
+				}
 				hasAuth = true
 				break
 			}

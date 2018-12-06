@@ -32,7 +32,7 @@ type WrapperParams struct {
 	EmbeddedSwaggerURL  string            // optional, when specified the swagger will be generated, merged and included by specified url
 	BypassContext       bool              // optional, when specified pass do not parse context.Context
 	AuthPrefixes        []string          // optional, call auth provider for method with specified prefixes. useful only with BypassContext
-	AuthType            AuthType          // optional, required for auth prefixes - type of auth
+	AuthType            []Auth            // optional, required for auth prefixes - type of auth
 	NormalizeFieldsName bool              // optional, make first letter in fields in model to lower case
 }
 
@@ -132,8 +132,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					numParsableInArgs++
 				}
 				if authRequired {
-					params.AuthType.AddRequestField(group)
-					numParsableInArgs++
+					for _, auth := range params.AuthType {
+						numParsableInArgs += auth.AddRequestField(group)
+					}
 				}
 			})
 
@@ -142,8 +143,15 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			}
 			out.Func().Parens(jen.Id("h").Op("*").Id(typeName)).Id("handle" + method.Name).Params(jen.Id("gctx").Op("*").Qual("github.com/gin-gonic/gin", "Context")).BlockFunc(func(group *jen.Group) {
 				group.Var().Id("params").Id(argType)
+				group.List(jen.Id("body"), jen.Err()).Op(":=").Id("gctx").Dot("GetRawData").Call()
+				group.If(jen.Err().Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
+					g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed read body:"), jen.Err())
+					g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+					g.Return()
+				})
+
 				group.IfFunc(func(ifG *jen.Group) {
-					ifG.Err().Op(":=").Id("gctx").Dot("Bind").Call(jen.Op("&").Id("params"))
+					ifG.Err().Op(":=").Qual("encoding/json", "Unmarshal").Call(jen.Id("body"), jen.Op("&").Id("params"))
 					ifG.Err().Op("!=").Nil()
 				}).BlockFunc(func(g *jen.Group) {
 					g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed to parse arguments:"), jen.Err())
@@ -158,16 +166,28 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				}
 				group.Id("ctx").Op(":=").Qual("context", "Background").Call()
 				if authRequired {
-					group.IfFunc(func(ifSt *jen.Group) {
-						ifSt.List(jen.Id("nctx"), jen.Id("ok")).Op(":=").Add(params.AuthType.ValidateRequest(jen.Id("h"), jen.Id("params"), jen.Id("gctx")))
-						ifSt.Op("!").Id("ok")
-					}).BlockFunc(func(ifNotAuth *jen.Group) {
-						ifNotAuth.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("unauthorized request from"), jen.Id("gctx").Dot("Request").Dot("RemoteAddr"))
-						ifNotAuth.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusUnauthorized"))
-						ifNotAuth.Return()
-					}).Else().BlockFunc(func(els *jen.Group) {
-						els.Id("ctx").Op("=").Id("nctx")
-					})
+					for _, auth := range params.AuthType {
+						auth.Parse(group)
+					}
+					group.Var().Id("nctx").Qual("context", "Context")
+					group.Var().Id("ok").Bool()
+
+					var authGroup *jen.Statement = group.Empty()
+
+					for i, auth := range params.AuthType {
+						if i != 0 {
+							authGroup = authGroup.Else()
+						}
+						authGroup = authGroup.IfFunc(func(ifSt *jen.Group) {
+							ifSt.List(jen.Id("nctx"), jen.Id("ok")).Op("=").Add(auth.ValidateRequest(jen.Id("h"), jen.Id("params"), jen.Id("gctx")))
+							ifSt.Op("!").Id("ok")
+						}).BlockFunc(func(ifNotAuth *jen.Group) {
+							ifNotAuth.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("unauthorized request from"), jen.Id("gctx").Dot("Request").Dot("RemoteAddr"))
+							ifNotAuth.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusUnauthorized"))
+							ifNotAuth.Return()
+						})
+					}
+					group.Id("ctx").Op("=").Id("nctx")
 				}
 				call := jen.Id("h").Dot("wrap").Dot(method.Name).CallFunc(func(args *jen.Group) {
 					for _, inParam := range method.In {
@@ -218,8 +238,10 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			})
 		}
 		if numAuthMethods > 0 {
-			out.Add(params.AuthType.GenerateInterface("Auth" + ifs.Name))
-			ifStructDef.Id("auth").Id("Auth" + ifs.Name)
+			for _, auth := range params.AuthType {
+				out.Add(auth.GenerateInterface("Auth" + auth.Name()))
+				ifStructDef.Id("auth" + auth.Name()).Id("Auth" + auth.Name())
+			}
 		}
 
 		out.Line()
@@ -249,8 +271,10 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			subCall.Id("lock")
 		}
 		if numAuthMethods > 0 {
-			subParams.Id("auth").Id("Auth" + ifs.Name)
-			subCall.Id("auth")
+			for _, auth := range params.AuthType {
+				subParams.Id("auth" + auth.Name()).Id("Auth" + auth.Name())
+				subCall.Id("auth" + auth.Name())
+			}
 		}
 
 		if !params.DisableSwagger {

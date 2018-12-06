@@ -12,6 +12,27 @@ const (
 	Token AuthType = 1
 )
 
+type Auth interface {
+	Name() string
+	GenerateInterface(name string) jen.Code
+	AddRequestField(group *jen.Group) int
+	Parse(group *jen.Group)
+	ValidateRequest(self *jen.Statement, req *jen.Statement, gctx *jen.Statement) jen.Code
+	SwaggerSecurity(sw *types.Swagger)
+	SwaggerSecTag() string
+}
+
+func (a AuthType) Name() string {
+	switch a {
+	case Token:
+		return "Token"
+	case JWT:
+		return "JWT"
+	default:
+		panic("unknown auth type")
+	}
+}
+
 func (a AuthType) GenerateInterface(name string) jen.Code {
 	switch a {
 	case Token, JWT:
@@ -23,28 +44,32 @@ func (a AuthType) GenerateInterface(name string) jen.Code {
 	}
 }
 
-func (a AuthType) AddRequestField(group *jen.Group) {
+func (a AuthType) AddRequestField(group *jen.Group) int {
 	switch a {
 	case JWT:
+		return 0
 	case Token:
 		group.Id("Token").String().Tag(map[string]string{"json": "token", "xml": "token", "form": "token", "query": "token"})
+		return 1
 	default:
 		panic("unknown auth type")
 	}
 }
+
+func (a AuthType) Parse(group *jen.Group) {}
 
 func (a AuthType) ValidateRequest(self *jen.Statement, req *jen.Statement, gctx *jen.Statement) jen.Code {
 	switch a {
 	case JWT:
-		return jen.Add(self).Dot("auth").Dot("Validate").Call(jen.Id("ctx"), jen.Add(gctx).Dot("GetHeader").Call(jen.Lit("Authorization")))
+		return jen.Add(self).Dot("auth"+a.Name()).Dot("Validate").Call(jen.Id("ctx"), jen.Add(gctx).Dot("GetHeader").Call(jen.Lit("Authorization")))
 	case Token:
-		return jen.Add(self).Dot("auth").Dot("Validate").Call(jen.Id("ctx"), jen.Add(req).Dot("Token"))
+		return jen.Add(self).Dot("auth"+a.Name()).Dot("Validate").Call(jen.Id("ctx"), jen.Add(req).Dot("Token"))
 	default:
 		panic("unknown auth type")
 	}
 }
 
-func (a AuthType) SwaggerSecuirty(sw *types.Swagger) {
+func (a AuthType) SwaggerSecurity(sw *types.Swagger) {
 	switch a {
 	case JWT:
 		if sw.SecurityDefinitions == nil {
@@ -75,4 +100,57 @@ func (a AuthType) SwaggerSecTag() string {
 	default:
 		panic("unknown auth type")
 	}
+}
+
+type AuthApiSignature int
+
+func (a AuthApiSignature) Name() string {
+	return "SignedToken"
+}
+
+func (AuthApiSignature) GenerateInterface(name string) jen.Code {
+	return jen.Type().Id(name).InterfaceFunc(func(auth *jen.Group) {
+		auth.Id("Validate").ParamsFunc(func(g *jen.Group) {
+			g.Id("ctx").Qual("context", "Context")
+			g.Id("apiToken").String()
+			g.Id("signature").String()
+			g.Id("body").Index().Byte()
+		}).Parens(jen.List(jen.Qual("context", "Context"), jen.Bool()))
+	})
+}
+
+func (AuthApiSignature) AddRequestField(group *jen.Group) int { return 0 }
+
+func (AuthApiSignature) Parse(group *jen.Group) {
+	group.Id("tokenSig").Op(":=").Qual("strings", "Split").Call(jen.Id("gctx").Dot("GetHeader").Call(jen.Lit("X-Api-Signed-Token")), jen.Lit(","))
+	group.If(jen.Len(jen.Id("tokenSig")).Op("!=").Lit(2)).BlockFunc(func(g *jen.Group) {
+		g.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusBadRequest"))
+		g.Return()
+	})
+
+}
+
+func (a AuthApiSignature) ValidateRequest(self *jen.Statement, req *jen.Statement, gctx *jen.Statement) jen.Code {
+	return jen.Add(self).Dot("auth" + a.Name()).Dot("Validate").CallFunc(func(callGroup *jen.Group) {
+		callGroup.Id("ctx")
+		callGroup.Id("tokenSig").Index(jen.Lit(0))
+		callGroup.Id("tokenSig").Index(jen.Lit(1))
+		callGroup.Id("body")
+	})
+}
+
+func (AuthApiSignature) SwaggerSecurity(sw *types.Swagger) {
+	if sw.SecurityDefinitions == nil {
+		sw.SecurityDefinitions = make(map[string]types.Auth)
+	}
+	sw.SecurityDefinitions["SignedToken"] = types.Auth{
+		Type:        "apiKey",
+		In:          "header",
+		Name:        "X-Api-Signed-Token",
+		Description: "API token with signature separated by space",
+	}
+}
+
+func (AuthApiSignature) SwaggerSecTag() string {
+	return "SignedToken"
 }
