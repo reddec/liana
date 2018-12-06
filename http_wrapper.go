@@ -133,6 +133,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					if param.GolangType() == "context.Context" && params.BypassContext {
 						continue
 					}
+					if param.GolangType() == "*gin.Context" {
+						continue
+					}
 					findRender(param, f).OnStructField(out, group, param, f, params)
 					numParsableInArgs++
 				}
@@ -209,6 +212,8 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					for _, inParam := range method.In {
 						if inParam.GolangType() == "context.Context" && params.BypassContext {
 							args.Id("ctx")
+						} else if inParam.GolangType() == "*gin.Context" {
+							args.Id("gctx")
 						} else {
 							var arg = args.Empty()
 							if inParam.IsPointer() {

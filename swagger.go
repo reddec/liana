@@ -65,9 +65,13 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 		var numParsableArgs int
 		var pt types.Path
 		var act types.Action
-
+		var hasGinContext bool
 		for _, arg := range method.In {
 			if arg.GolangType() == "context.Context" && usn.BypassContext {
+				continue
+			}
+			if arg.GolangType() == "*gin.Context" {
+				hasGinContext = true
 				continue
 			}
 			numParsableArgs++
@@ -137,7 +141,7 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 				Schema:      usn.generateTypeSchema(file, method.NonErrorOutputs()[0], &sw),
 			}
 		}
-		if numParsableArgs == 0 && usn.GetOnEmpty {
+		if !hasGinContext && numParsableArgs == 0 && usn.GetOnEmpty {
 			pt.Get = &act
 		} else {
 			pt.Post = &act
@@ -165,6 +169,9 @@ func (usn *swaggerGen) generateParamsDefinition(file *atool.File, tp *atool.Meth
 	def.Properties = make(map[string]*types.Definition)
 	for _, param := range tp.In {
 		if param.GolangType() == "context.Context" && usn.BypassContext {
+			continue
+		}
+		if param.GolangType() == "*gin.Context" {
 			continue
 		}
 		def.Properties[param.Name] = usn.generateTypeSchema(file, param, sw)
