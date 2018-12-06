@@ -34,6 +34,7 @@ var (
 	AuthPrefixes       = flag.String("auth", "", "Comma separated list prefixes which should be restricted by auth")
 	AuthTypes          = flag.String("auth-type", "JWT", "Comma separated list of supported auth types (JWT, Token, SignedToken)")
 	ErrCode            = flag.Int("err-code", http.StatusBadGateway, "Custom http error code")
+	preProcessor       = flag.Bool("pre", false, "Use pre-handler processor")
 )
 
 func main() {
@@ -88,6 +89,7 @@ func main() {
 		AuthPrefixes:       stringToList(*AuthPrefixes),
 		AuthType:           auth,
 		CustomErrCode:      *ErrCode,
+		PreProcessor:       *preProcessor,
 	})
 	if err != nil {
 		panic(err)

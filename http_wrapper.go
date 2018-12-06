@@ -35,6 +35,7 @@ type WrapperParams struct {
 	AuthType            []Auth            // optional, required for auth prefixes - type of auth
 	NormalizeFieldsName bool              // optional, make first letter in fields in model to lower case
 	CustomErrCode       int               // optional, custom http code for error
+	PreProcessor        bool              // optional, if defined additional function will be invoked right before handler
 }
 
 // Result of generator
@@ -96,6 +97,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			if !ok {
 				continue
 			}
+		}
+		if params.PreProcessor {
+			out.Type().Id("Processor"+ifs.Name).Func().Params(jen.Op("*").Qual("github.com/gin-gonic/gin", "Context"), jen.Qual("context", "Context")).Bool()
 		}
 		var numAuthMethods int
 		typeName := "handler" + ifs.Name
@@ -181,7 +185,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					for _, auth := range params.AuthType {
 						auth.Parse(group)
 					}
-					var authGroup *jen.Statement = group.Empty()
+					var authGroup = group.Empty()
 
 					for i, auth := range params.AuthType {
 						if i != 0 {
@@ -214,6 +218,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 						}
 					}
 				})
+				if params.PreProcessor {
+					group.If(jen.Op("!").Id("h").Dot("preProcessor").Call(jen.Id("gctx"), jen.Id("ctx"))).Block(jen.Return())
+				}
 				if params.Lock {
 					group.Id("h").Dot("lock").Dot("Lock").Call()
 				}
@@ -255,6 +262,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				ifStructDef.Id("auth" + auth.Name()).Id("Auth" + auth.Name())
 			}
 		}
+		if params.PreProcessor {
+			ifStructDef.Id("preProcessor").Id("Processor" + ifs.Name)
+		}
 
 		out.Line()
 		// Gin wrapper
@@ -287,6 +297,10 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				subParams.Id("auth" + auth.Name()).Id("Auth" + auth.Name())
 				subCall.Id("auth" + auth.Name())
 			}
+		}
+		if params.PreProcessor {
+			subParams.Id("preProcessor").Id("Processor" + ifs.Name)
+			subCall.Id("preProcessor")
 		}
 
 		if !params.DisableSwagger {
