@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"path/filepath"
 	"strings"
 )
@@ -32,6 +33,7 @@ var (
 	BypassContext      = flag.Bool("bypass-context", false, "Do not parse *context.Context and generate stub for it")
 	AuthPrefixes       = flag.String("auth", "", "Comma separated list prefixes which should be restricted by auth")
 	AuthTypes          = flag.String("auth-type", "JWT", "Comma separated list of supported auth types (JWT, Token, SignedToken)")
+	ErrCode            = flag.Int("err-code", http.StatusBadGateway, "Custom http error code")
 )
 
 func main() {
@@ -85,6 +87,7 @@ func main() {
 		BypassContext:      *BypassContext,
 		AuthPrefixes:       stringToList(*AuthPrefixes),
 		AuthType:           auth,
+		CustomErrCode:      *ErrCode,
 	})
 	if err != nil {
 		panic(err)

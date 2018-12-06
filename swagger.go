@@ -120,7 +120,7 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 			}
 		}
 		if len(method.ErrorOutputs()) > 0 {
-			act.Responses[http.StatusInternalServerError] = types.Response{
+			act.Responses[usn.WrapperParams.CustomErrCode] = types.Response{
 				Description: "Failed to process request by the handler",
 				Schema: &types.Definition{
 					Type: "string",

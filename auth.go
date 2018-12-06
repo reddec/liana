@@ -138,9 +138,8 @@ func (AuthApiSignature) AddRequestField(group *jen.Group) int { return 0 }
 
 func (AuthApiSignature) Parse(group *jen.Group) {
 	group.Id("tokenSig").Op(":=").Qual("strings", "Split").Call(jen.Id("gctx").Dot("GetHeader").Call(jen.Lit("X-Api-Signed-Token")), jen.Lit(","))
-	group.If(jen.Len(jen.Id("tokenSig")).Op("!=").Lit(2)).BlockFunc(func(g *jen.Group) {
-		g.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusBadRequest"))
-		g.Return()
+	group.If(jen.Len(jen.Id("tokenSig")).Op("<").Lit(2)).BlockFunc(func(g *jen.Group) {
+		g.Id("tokenSig").Op("=").Append(jen.Id("tokenSig"), jen.Lit(""))
 	})
 
 }

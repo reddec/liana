@@ -34,6 +34,7 @@ type WrapperParams struct {
 	AuthPrefixes        []string          // optional, call auth provider for method with specified prefixes. useful only with BypassContext
 	AuthType            []Auth            // optional, required for auth prefixes - type of auth
 	NormalizeFieldsName bool              // optional, make first letter in fields in model to lower case
+	CustomErrCode       int               // optional, custom http code for error
 }
 
 // Result of generator
@@ -228,7 +229,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					for _, errOut := range method.ErrorOutputs() {
 						group.If(jen.Id(errOut.Name).Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
 							g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("invoke returned error:"), jen.Id(errOut.Name))
-							g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusInternalServerError"), jen.Id(errOut.Name))
+							g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Lit(params.CustomErrCode), jen.Id(errOut.Name).Dot("Error").Call())
 							g.Return()
 						})
 					}
