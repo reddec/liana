@@ -36,6 +36,7 @@ type WrapperParams struct {
 	NormalizeFieldsName bool              // optional, make first letter in fields in model to lower case
 	CustomErrCode       int               // optional, custom http code for error
 	PreProcessor        bool              // optional, if defined additional function will be invoked right before handler
+	CustomMarshaller    bool              // optional, use custom marshaller for JSON
 }
 
 // Result of generator
@@ -100,6 +101,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		}
 		if params.PreProcessor {
 			out.Type().Id("Processor"+ifs.Name).Func().Params(jen.Op("*").Qual("github.com/gin-gonic/gin", "Context"), jen.Qual("context", "Context")).Bool()
+		}
+		if params.CustomMarshaller {
+			out.Type().Id("Marshaller" + ifs.Name).Func().Params(jen.Interface()).Parens(jen.List(jen.Index().Byte(), jen.Error()))
 		}
 		var numAuthMethods int
 		typeName := "handler" + ifs.Name
@@ -183,7 +187,8 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					}
 					findRender(param, f).OnParseField(out, group, param, f)
 				}
-				group.Id("ctx").Op(":=").Qual("context", "Background").Call()
+				group.Id("ctx").Op(":=").Qual("context", "WithValue").Call(jen.Qual("context", "Background").Call(), jen.Lit("method"), jen.Lit(method.Name))
+
 				if authRequired {
 					for _, auth := range params.AuthType {
 						auth.Parse(group)
@@ -249,7 +254,16 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 						group.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusNoContent"))
 					} else {
 						for _, result := range method.NonErrorOutputs() {
-							group.Id("gctx").Dot("IndentedJSON").Call(jen.Qual("net/http", "StatusOK"), jen.Id(result.Name))
+							if params.CustomMarshaller {
+								group.List(jen.Id("resData"), jen.Err()).Op(":=").Id("h").Dot("marshaller").Call(jen.Id(result.Name))
+								group.If(jen.Err().Op("!=").Nil()).BlockFunc(func(failedEncode *jen.Group) {
+									failedEncode.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusInternalServerError"), jen.Err())
+									failedEncode.Return()
+								})
+								group.Id("gctx").Dot("Data").Call(jen.Qual("net/http", "StatusOK"), jen.Lit("application/json"), jen.Id("resData"))
+							} else {
+								group.Id("gctx").Dot("IndentedJSON").Call(jen.Qual("net/http", "StatusOK"), jen.Id(result.Name))
+							}
 						}
 					}
 				} else {
@@ -270,7 +284,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		if params.PreProcessor {
 			ifStructDef.Id("preProcessor").Id("Processor" + ifs.Name)
 		}
-
+		if params.CustomMarshaller {
+			ifStructDef.Id("marshaller").Id("Marshaller" + ifs.Name)
+		}
 		out.Line()
 		// Gin wrapper
 		comment := "Wrapper of " + f.Package + "." + ifs.Name + " that expose functions over simple JSON HTTP interface.\n Those methods are wrapped: "
@@ -306,6 +322,10 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		if params.PreProcessor {
 			subParams.Id("preProcessor").Id("Processor" + ifs.Name)
 			subCall.Id("preProcessor")
+		}
+		if params.CustomMarshaller {
+			subParams.Id("marshaller").Id("Marshaller" + ifs.Name)
+			subCall.Id("marshaller")
 		}
 
 		if !params.DisableSwagger {

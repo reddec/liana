@@ -35,6 +35,7 @@ var (
 	AuthTypes          = flag.String("auth-type", "JWT", "Comma separated list of supported auth types (JWT, Token, SignedToken)")
 	ErrCode            = flag.Int("err-code", http.StatusBadGateway, "Custom http error code")
 	preProcessor       = flag.Bool("pre", false, "Use pre-handler processor")
+	customMarshaller   = flag.Bool("custom-json", false, "Use custom json marshaller")
 )
 
 func main() {
@@ -90,6 +91,7 @@ func main() {
 		AuthType:           auth,
 		CustomErrCode:      *ErrCode,
 		PreProcessor:       *preProcessor,
+		CustomMarshaller:   *customMarshaller,
 	})
 	if err != nil {
 		panic(err)
