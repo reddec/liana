@@ -36,6 +36,7 @@ var (
 	ErrCode            = flag.Int("err-code", http.StatusBadGateway, "Custom http error code")
 	preProcessor       = flag.Bool("pre", false, "Use pre-handler processor")
 	customMarshaller   = flag.Bool("custom-json", false, "Use custom json marshaller")
+	useValidator       = flag.Bool("validator", false, "Use Validate function on request objects")
 )
 
 func main() {
@@ -92,6 +93,7 @@ func main() {
 		CustomErrCode:      *ErrCode,
 		PreProcessor:       *preProcessor,
 		CustomMarshaller:   *customMarshaller,
+		UseValidator:       *useValidator,
 	})
 	if err != nil {
 		panic(err)

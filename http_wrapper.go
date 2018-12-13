@@ -37,6 +37,7 @@ type WrapperParams struct {
 	CustomErrCode       int               // optional, custom http code for error
 	PreProcessor        bool              // optional, if defined additional function will be invoked right before handler
 	CustomMarshaller    bool              // optional, use custom marshaller for JSON
+	UseValidator        bool              // optional, use method Validate() error to check requests
 }
 
 // Result of generator
@@ -166,7 +167,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					group.List(jen.Id("body"), jen.Err()).Op(":=").Id("gctx").Dot("GetRawData").Call()
 					group.If(jen.Err().Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
 						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed read body:"), jen.Err())
-						g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
 						g.Return()
 					})
 				}
@@ -177,7 +178,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 						ifG.Err().Op("!=").Nil()
 					}).BlockFunc(func(g *jen.Group) {
 						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed to parse arguments:"), jen.Err())
-						g.Id("gctx").Dot("AbortWithError").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
 						g.Return()
 					})
 				}
@@ -185,7 +186,20 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					if param.GolangType() == "context.Context" && params.BypassContext {
 						continue
 					}
+					if param.GolangType() == "*gin.Context" {
+						continue
+					}
 					findRender(param, f).OnParseField(out, group, param, f)
+					if params.UseValidator {
+						group.IfFunc(func(valid *jen.Group) {
+							valid.Err().Op(":=").Id("params").Dot(strings.Title(param.Name)).Dot("Validate").Call()
+							valid.Err().Op("!=").Nil()
+						}).BlockFunc(func(notValid *jen.Group) {
+							notValid.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("validation failed:"), jen.Err())
+							notValid.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+							notValid.Return()
+						})
+					}
 				}
 				group.Id("ctx").Op(":=").Qual("context", "WithValue").Call(jen.Qual("context", "Background").Call(), jen.Lit("method"), jen.Lit(method.Name))
 
