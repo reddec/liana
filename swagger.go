@@ -249,6 +249,9 @@ func (usn *swaggerGen) generateStructDefinition(st *atool.Struct, sw *types.Swag
 				name = tagName
 			}
 			def.Properties[name] = usn.generateTypeSchema(st.File, f, sw)
+			if usn.WrapperParams.RequiredByComment != "" && strings.Contains(f.Comment, usn.WrapperParams.RequiredByComment) {
+				def.Required = append(def.Required, name)
+			}
 		}
 	}
 	return &def

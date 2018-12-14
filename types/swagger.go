@@ -60,6 +60,7 @@ type Definition struct {
 	Format      string                 `yaml:"format,omitempty"`
 	Description string                 `yaml:"description,omitempty"`
 	Example     string                 `yaml:"example,omitempty"`
+	Required    []string               `yaml:"required,omitempty"`
 	Properties  map[string]*Definition `yaml:"properties,omitempty"`
 	Ref         string                 `yaml:"$ref,omitempty"`
 	Items       *Definition            `yaml:"items,omitempty"`

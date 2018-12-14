@@ -38,6 +38,7 @@ type WrapperParams struct {
 	PreProcessor        bool              // optional, if defined additional function will be invoked right before handler
 	CustomMarshaller    bool              // optional, use custom marshaller for JSON
 	UseValidator        bool              // optional, use method Validate() error to check requests
+	RequiredByComment   string            // optional, mark fields as required in swagger if they contain specified keyword
 }
 
 // Result of generator
