@@ -168,7 +168,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					group.List(jen.Id("body"), jen.Err()).Op(":=").Id("gctx").Dot("GetRawData").Call()
 					group.If(jen.Err().Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
 						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed read body:"), jen.Err())
-						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err().Dot("Error").Call())
 						g.Return()
 					})
 				}
@@ -179,7 +179,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 						ifG.Err().Op("!=").Nil()
 					}).BlockFunc(func(g *jen.Group) {
 						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed to parse arguments:"), jen.Err())
-						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err().Dot("Error").Call())
 						g.Return()
 					})
 				}
@@ -197,7 +197,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 							valid.Err().Op("!=").Nil()
 						}).BlockFunc(func(notValid *jen.Group) {
 							notValid.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("validation failed:"), jen.Err())
-							notValid.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err())
+							notValid.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err().Dot("Error").Call())
 							notValid.Return()
 						})
 					}
