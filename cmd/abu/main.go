@@ -229,7 +229,7 @@ func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultL
 type Page struct {
 	common
 	KeyType string `long:"key-type" env:"KEY_TYPE" description:"Key type" choice:"string" choice:"int64" default:"string"`
-	Pattern string `long:"pattern" env:"PATTERN" description:"Regexp pattern to extract key from URL" default:"/(.*?)$"`
+	Pattern string `long:"pattern" env:"PATTERN" description:"Regexp pattern to extract key from URL" default:"([^/]+)$"`
 }
 
 type renderPageParams struct {
