@@ -8,6 +8,19 @@
 <body>
 {{$end := "{{end}}"}}
 <!-- top -->
+{{- if $.Params.Menu}}
+    <nav class="navbar navbar-expand-lg bg-dark">
+        <div class="navbar-expand" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                {{- range $title, $ref := $.Params.Menu}}
+                    <li class="nav-item {{if eq $.Params.Active $title}}active{{end}}">
+                        <a class="nav-link" style="color: #f8f9fa" href="{{$ref}}">{{$title}}</a>
+                    </li>
+                {{- end}}
+            </ul>
+        </div>
+    </nav>
+{{- end}}
 <div class="container">
     <br/>
     <h1 class="text-center">{{.Params.Title}}</h1>
