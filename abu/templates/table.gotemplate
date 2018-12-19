@@ -22,8 +22,10 @@
     </nav>
 {{- end}}
 <div class="container">
-    <br/>
-    <h1 class="text-center">{{.Params.Title}}</h1>
+    {{- if .Params.Title}}
+        <br/>
+        <h1 class="text-center">{{.Params.Title}}</h1>
+    {{- end}}
     <br/>
     <table class="table table-striped {{- if $.Params.ItemLink}}table-hover{{end}}">
         <thead>

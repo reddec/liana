@@ -17,6 +17,7 @@ import (
 
 var config struct {
 	List List `command:"list" description:"generate page for tables"`
+	Page Page `command:"page" description:"generate page for single item"`
 }
 
 func main() {
@@ -26,13 +27,11 @@ func main() {
 	}
 }
 
-type List struct {
-	Title           string   `long:"title" env:"TITLE" description:"Title of page" default:"List of items"`
+type common struct {
+	Title           string   `long:"title" env:"TITLE" description:"Title of page" default:""`
 	Type            string   `long:"type" env:"TYPE" description:"Type name of item (should be imported in a current package)" required:"yes"`
-	MaxLimit        int      `long:"max-limit" env:"MAX_LIMIT" description:"Maximum value of limit" default:"50"`
-	DefaultLimit    int      `long:"default-limit" env:"DEFAULT_LIMIT" description:"Default limit" default:"20"`
-	Fields          []string `long:"field" short:"f" env:"FIELD" env-delim:"," description:"Fields to include to table. If set only this fields will be used otherwise - everything. Conflicts with EXCLUDE parameter"`
-	Exclude         []string `long:"exclude" short:"e" env:"EXCLUDE" env-delim:"," description:"Exclude fields from table columns. If set then all fields will be used except specified, otherwise - everything. Conflicts with FIELDS parameter"`
+	Fields          []string `long:"field" short:"f" env:"FIELD" env-delim:"," description:"Fields to include. If set only this fields will be used otherwise - everything. Conflicts with EXCLUDE parameter"`
+	Exclude         []string `long:"exclude" short:"e" env:"EXCLUDE" env-delim:"," description:"Exclude fields. If set then all fields will be used except specified, otherwise - everything. Conflicts with FIELDS parameter"`
 	SymbolScanLimit int      `long:"symbol-scan-limit" env:"SYMBOL_SCAN_LIMIT" description:"Limit to scan for an imports" default:"-1"`
 	Package         string   `long:"package" env:"PACKAGE" description:"Package name (default is current)"`
 	// ui features
@@ -46,52 +45,61 @@ type List struct {
 	} `positional-args:"yes"`
 }
 
-func (l *List) Execute(args []string) error {
-	if len(l.Fields) > 0 && len(l.Exclude) > 0 {
-		return errors.New("fields and exclude parameter are conflicted")
+type commonParams struct {
+	Fields  []string
+	Titles  []string
+	Templ   *template.Template
+	Sym     *symbols.Symbol
+	Project *symbols.Project
+	file    *jen.File
+}
+
+func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, error) {
+	if len(c.Fields) > 0 && len(c.Exclude) > 0 {
+		return nil, errors.New("fields and exclude parameter are conflicted")
 	}
 	var blackList = make(map[string]bool)
 	var whiteList = make(map[string]bool)
-	for _, f := range l.Fields {
+	for _, f := range c.Fields {
 		whiteList[f] = true
 	}
-	for _, f := range l.Exclude {
+	for _, f := range c.Exclude {
 		blackList[f] = true
 	}
 
 	funcs := sprig.TxtFuncMap()
 	funcs["gtpl"] = func(txt string) string { return "{{" + txt + "}}" }
 	var templ = template.New("").Funcs(funcs)
-	if l.TemplatePath != "" {
-		data, err := ioutil.ReadFile(l.TemplatePath)
+	if c.TemplatePath != "" {
+		data, err := ioutil.ReadFile(c.TemplatePath)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		templ, err = templ.Parse(string(data))
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		t, err := templ.Parse(string(abu.MustAsset("templates/table.gotemplate")))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		templ = t
 	}
 
-	proj, err := symbols.ProjectByDir(l.Positional.RootDir, l.SymbolScanLimit)
+	proj, err := symbols.ProjectByDir(c.Positional.RootDir, c.SymbolScanLimit)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	sym, err := proj.FindLocalSymbol(l.Type)
+	sym, err := proj.FindLocalSymbol(c.Type)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fields, err := sym.FieldsNames()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var (
@@ -114,40 +122,58 @@ func (l *List) Execute(args []string) error {
 		titleRender = append(titleRender, strings.Join(camelcase.Split(f), " "))
 	}
 	if len(fieldsRender) == 0 {
-		return errors.New("no fields to render")
+		return nil, errors.New("no fields to render")
 	}
+	var out *jen.File
+	if c.Package == "" {
+		out = jen.NewFilePathName(proj.Package.Import, proj.Package.Package)
+	} else {
+		out = jen.NewFile(c.Package)
+	}
+	return &commonParams{
+		Fields:  fields,
+		Titles:  titleRender,
+		Project: proj,
+		Sym:     sym,
+		Templ:   templ,
+		file:    out,
+	}, nil
+}
 
+type List struct {
+	MaxLimit     int `long:"max-limit" env:"MAX_LIMIT" description:"Maximum value of limit" default:"50"`
+	DefaultLimit int `long:"default-limit" env:"DEFAULT_LIMIT" description:"Default limit" default:"20"`
+	common
+}
+
+func (l *List) Execute(args []string) error {
+	params, err := l.prepare(args, string(abu.MustAsset("templates/table.gotemplate")))
+	if err != nil {
+		return err
+	}
 	renderParams := renderListParams{
-		Fields: fieldsRender,
-		Titles: titleRender,
-		Params: *l,
+		commonParams: *params,
+		Params:       *l,
 	}
 	preRender := &bytes.Buffer{}
 	// render template
-	err = templ.Execute(preRender, renderParams)
+	err = params.Templ.Execute(preRender, renderParams)
 	if err != nil {
 		return err
 	}
 
-	code, err := createListHandler(sym, preRender.String(), l.MaxLimit, l.DefaultLimit)
+	code, err := createListHandler(params.Sym, preRender.String(), l.MaxLimit, l.DefaultLimit)
 	if err != nil {
 		return err
 	}
-	var out *jen.File
-	if l.Package == "" {
-		out = jen.NewFilePathName(proj.Package.Import, proj.Package.Package)
-	} else {
-		out = jen.NewFile(l.Package)
-	}
-
+	out := params.file
 	out.Add(code)
 	return out.Render(os.Stdout)
 }
 
 type renderListParams struct {
 	Params List
-	Fields []string
-	Titles []string
+	commonParams
 }
 
 func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultLimit int) (jen.Code, error) {
@@ -196,6 +222,103 @@ func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultL
 			handler.Id("rw").Dot("Header").Call().Dot("Set").Call(jen.Lit("Content-Type"), jen.Lit("text/html"))
 			handler.Id("rw").Dot("WriteHeader").Call(jen.Qual("net/http", "StatusOK"))
 			handler.Id("tpl").Dot("Execute").Call(jen.Id("rw"), jen.Op("&").Id("params").Values(jen.Id("limit"), jen.Id("offset"), jen.Id("next"), jen.Id("prev"), jen.Id("num"), jen.Id("data")))
+		}))
+	}), nil
+}
+
+type Page struct {
+	common
+	KeyType string `long:"key-type" env:"KEY_TYPE" description:"Key type" choice:"string" choice:"int64" default:"string"`
+	Pattern string `long:"pattern" env:"PATTERN" description:"Regexp pattern to extract key from URL" default:"/(.*?)$"`
+}
+
+type renderPageParams struct {
+	commonParams
+	Params Page
+}
+
+func (l *Page) Execute(args []string) error {
+	params, err := l.prepare(args, string(abu.MustAsset("templates/page.gotemplate")))
+	if err != nil {
+		return err
+	}
+	renderParams := renderPageParams{
+		commonParams: *params,
+		Params:       *l,
+	}
+	preRender := &bytes.Buffer{}
+	// render template
+	err = params.Templ.Execute(preRender, renderParams)
+	if err != nil {
+		return err
+	}
+
+	code, err := createPageHandler(params.Sym, preRender.String(), l.KeyType, l.Pattern)
+	if err != nil {
+		return err
+	}
+	out := params.file
+	out.Add(code)
+	return out.Render(os.Stdout)
+}
+
+func createPageHandler(sym *symbols.Symbol, preRender string, keyType string, pattern string) (jen.Code, error) {
+	var parser jen.Code
+	switch keyType {
+	case "string":
+		parser = jen.Id("key").Op(":=").Id("param")
+	case "int64":
+		parser = jen.List(jen.Id("key"), jen.Err()).Qual("strconv", "ParseInt").Call(jen.Id("param"), jen.Lit(10), jen.Lit(64)).Line().If(jen.Err().Op("!=").Nil()).BlockFunc(func(group *jen.Group) {
+			group.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-page]"), jen.Err())
+			group.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Err().Dot("Error").Call(), jen.Qual("net/http", "StatusBadRequest"))
+			group.Return()
+		})
+	default:
+		return nil, errors.New("unknown key type")
+	}
+	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
+	inType := jen.Func().Params(jen.Id("key").Id(keyType)).Params(jen.Op("*").Qual(sym.Import.Import, sym.Name), jen.Error())
+	return jen.Func().Id("HandlerPage" + sym.Name).Params(jen.Id("provider").Add(inType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
+		group.Const().Id("templateData").Op("=").Lit(preRender)
+		group.Var().Id("pattern").Op("=").Qual("regexp", "MustCompile").Call(jen.Lit(pattern))
+		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Parse").Call(jen.Id("templateData"))
+		group.If(jen.Err().Op("!=").Nil()).Block(jen.Panic(jen.Err()))
+		group.Type().Id("params").StructFunc(func(strct *jen.Group) {
+			strct.Id("Key").Id(keyType)
+			strct.Id("Data").Op("*").Qual(sym.Import.Import, sym.Name)
+		})
+		group.Return(jen.Add(handlerFuncType).BlockFunc(func(handler *jen.Group) {
+			handler.Defer().Id("rq").Dot("Body").Dot("Close").Call()
+			handler.Id("matches").Op(":=").Id("pattern").Dot("FindStringSubmatch").Call(jen.Id("rq").Dot("URL").Dot("Path"))
+			handler.If(jen.Len(jen.Id("matches")).Op("<").Lit(2)).BlockFunc(func(errGroup *jen.Group) {
+				errGroup.Qual("log", "Println").Call(jen.Lit("[" + sym.Name + "-page] no params"))
+				errGroup.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Lit(" no params"), jen.Qual("net/http", "StatusNotFound"))
+				errGroup.Return()
+			})
+
+			handler.Id("param").Op(":=").Id("matches").Index(jen.Lit(1))
+			handler.If(jen.Id("param").Op("==").Lit("")).BlockFunc(func(errGroup *jen.Group) {
+				errGroup.Qual("log", "Println").Call(jen.Lit("[" + sym.Name + "-page] empty param"))
+				errGroup.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Lit("empty param"), jen.Qual("net/http", "StatusNotFound"))
+				errGroup.Return()
+			})
+
+			handler.Add(parser)
+
+			handler.List(jen.Id("data"), jen.Err()).Op(":=").Id("provider").Call(jen.Id("key"))
+			handler.If(jen.Err().Op("!=").Nil()).BlockFunc(func(errGroup *jen.Group) {
+				errGroup.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-page]"), jen.Err())
+				errGroup.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Err().Dot("Error").Call(), jen.Qual("net/http", "StatusBadGateway"))
+				errGroup.Return()
+			}).Else().If(jen.Id("data").Op("==").Nil()).BlockFunc(func(errGroup *jen.Group) {
+				errGroup.Qual("log", "Println").Call(jen.Lit("[" + sym.Name + "-page] no data"))
+				errGroup.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Lit(" no data"), jen.Qual("net/http", "StatusNotFound"))
+				errGroup.Return()
+			})
+
+			handler.Id("rw").Dot("Header").Call().Dot("Set").Call(jen.Lit("Content-Type"), jen.Lit("text/html"))
+			handler.Id("rw").Dot("WriteHeader").Call(jen.Qual("net/http", "StatusOK"))
+			handler.Id("tpl").Dot("Execute").Call(jen.Id("rw"), jen.Op("&").Id("params").Values(jen.Id("key"), jen.Id("data")))
 		}))
 	}), nil
 }
