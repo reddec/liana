@@ -2,6 +2,30 @@
 
 
 [[projects]]
+  digest = "1:55388fd080150b9a072912f97b1f5891eb0b50df43401f8b75fb4273d3fec9fc"
+  name = "github.com/Masterminds/semver"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "c7af12943936e8c39859482e61f0574c2fd7fc75"
+  version = "v1.4.2"
+
+[[projects]]
+  digest = "1:b0baf96eb3f1387dfd368f38f1d9c91adb947239530014d1006540ccee7579b2"
+  name = "github.com/Masterminds/sprig"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "15f9564e7e9cf0da02a48e0d25f12a7b83559aa6"
+  version = "v2.16.0"
+
+[[projects]]
+  digest = "1:8f5416c7f59da8600725ae1ff00a99af1da8b04c211ae6f3c8f8bcab0164f650"
+  name = "github.com/aokoli/goutils"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "3391d3790d23d03408670993e957e8f408993c34"
+  version = "v1.0.1"
+
+[[projects]]
   digest = "1:12bc53a794bd3f5169f71e87c18e15df70c51324e51d84a6b83dbdadf366d2c7"
   name = "github.com/dave/jennifer"
   packages = ["jen"]
@@ -16,6 +40,14 @@
   pruneopts = "UT"
   revision = "8991bc29aa16c548c550c7ff78260e27b9ab7c73"
   version = "v1.1.1"
+
+[[projects]]
+  digest = "1:bbc4aacabe6880bdbce849c64cb061b7eddf39f132af4ea2853ddd32f85fbec3"
+  name = "github.com/fatih/camelcase"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "44e46d280b43ec1531bb25252440e34f1b800b65"
+  version = "v1.0.0"
 
 [[projects]]
   branch = "master"
@@ -45,6 +77,38 @@
   pruneopts = "UT"
   revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
   version = "v1.2.0"
+
+[[projects]]
+  digest = "1:236d7e1bdb50d8f68559af37dbcf9d142d56b431c9b2176d41e2a009b664cda8"
+  name = "github.com/google/uuid"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "9b3b1e0f5f99ae461456d768e7d301a7acdaa2d8"
+  version = "v1.1.0"
+
+[[projects]]
+  digest = "1:f9a5e090336881be43cfc1cf468330c1bdd60abdc9dd194e0b1ab69f4b94dd7c"
+  name = "github.com/huandu/xstrings"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "f02667b379e2fb5916c3cda2cf31e0eb885d79f8"
+  version = "v1.2.0"
+
+[[projects]]
+  digest = "1:8eb1de8112c9924d59bf1d3e5c26f5eaa2bfc2a5fcbb92dc1c2e4546d695f277"
+  name = "github.com/imdario/mergo"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "9f23e2d6bd2a77f959b2bf6acdbefd708a83a4a4"
+  version = "v0.3.6"
+
+[[projects]]
+  digest = "1:a2cff208d4759f6ba1b1cd228587b0a1869f95f22542ec9cd17fff64430113c7"
+  name = "github.com/jessevdk/go-flags"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "c6ca198ec95c841fdb89fc0de7496fed11ab854e"
+  version = "v1.4.0"
 
 [[projects]]
   digest = "1:3e551bbb3a7c0ab2a2bf4660e7fcad16db089fdcfbb44b0199e62838038623ea"
@@ -111,6 +175,14 @@
   revision = "7e5f0ee451dd35b1a50e67197b4434f99d2b6af8"
 
 [[projects]]
+  branch = "master"
+  digest = "1:67f3dc84858362be6cd42d7351b765eb0bac636aaa1759f47a21e1a19408b980"
+  name = "github.com/reddec/symbols"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "4917986653a5b971a2c6ec140fedc371f0300a24"
+
+[[projects]]
   digest = "1:81e02c4edb639c80559c0650f9401d3e2dcc3256d1fa215382bb7c83c1db9126"
   name = "github.com/shopspring/decimal"
   packages = ["."]
@@ -133,6 +205,17 @@
   pruneopts = "UT"
   revision = "b4c50a2b199d93b13dc15e78929cfb23bfdf21ab"
   version = "v1.1.1"
+
+[[projects]]
+  branch = "master"
+  digest = "1:dd658e9008df9e0bea1ddb2caa3df8250e5e42bf54dcb776ed5bef0496395549"
+  name = "golang.org/x/crypto"
+  packages = [
+    "pbkdf2",
+    "scrypt",
+  ]
+  pruneopts = "UT"
+  revision = "505ab145d0a99da450461ae2c1a9f6cd10d1f447"
 
 [[projects]]
   branch = "master"
@@ -170,10 +253,15 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/Masterminds/sprig",
     "github.com/dave/jennifer/jen",
+    "github.com/fatih/camelcase",
     "github.com/gin-gonic/gin",
+    "github.com/jessevdk/go-flags",
     "github.com/knq/snaker",
+    "github.com/pkg/errors",
     "github.com/reddec/astools",
+    "github.com/reddec/symbols",
     "github.com/shopspring/decimal",
     "github.com/stretchr/testify/assert",
     "gopkg.in/guregu/null.v3",

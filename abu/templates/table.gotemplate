@@ -1,0 +1,63 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>{{.Params.Title}}</title>
+    <link rel="stylesheet" href="{{.Params.BootstrapURL}}"/>
+</head>
+<body>
+{{$end := "{{end}}"}}
+<!-- top -->
+<div class="container">
+    <br/>
+    <h1 class="text-center">{{.Params.Title}}</h1>
+    <br/>
+    <table class="table table-striped {{- if $.Params.ItemLink}}table-hover{{end}}">
+        <thead>
+        <tr>
+            {{range $field := .Titles}}
+                <th>{{$field}}</th>
+            {{end}}
+        </tr>
+        </thead>
+        <tbody>
+        {{"- range .Data" | gtpl}}
+        <tr>
+            {{- range $field := .Fields}}
+                {{- if $.Params.ItemLink}}
+                    <td>
+                        <a href="{{$.Params.ItemLink}}">{{"{{"}}.{{$field}}{{"}}"}}</a>
+                    </td>
+                {{- else}}
+                    <td>{{"{{"}}.{{$field}}{{"}}"}}</td>
+                {{- end}}
+            {{- end}}
+        </tr>
+        {{$end}}
+        </tbody>
+    </table>
+</div>
+
+<div class="container">
+    <nav>
+        <ul class="pagination justify-content-center">
+            <li class="page-item {{"{{"}}if le .Offset 0{{"}}"}}disabled{{$end}}">
+                <a class="page-link" href="?offset={{".Prev" | gtpl }}&limit={{".Limit" | gtpl }}"
+                   tabindex="-1">Previous</a>
+            </li>
+            <li class="page-item {{"if lt .Num .Limit" | gtpl }}disabled{{$end}}">
+                <a class="page-link" href="?offset={{".Next" | gtpl }}&limit={{".Limit" | gtpl }}">Next</a>
+            </li>
+        </ul>
+    </nav>
+</div>
+
+<style>
+    td {
+        word-break: break-all;
+    }
+
+
+</style>
+</body>
+</html>
