@@ -35,12 +35,13 @@ type common struct {
 	SymbolScanLimit int      `long:"symbol-scan-limit" env:"SYMBOL_SCAN_LIMIT" description:"Limit to scan for an imports" default:"-1"`
 	Package         string   `long:"package" env:"PACKAGE" description:"Package name (default is current)"`
 	// ui features
-	BootstrapURL string            `long:"bootstrap-url" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"`
-	TemplatePath string            `long:"template" env:"TEMPLATE" description:"Custom template path. If not set - used default"`
-	ItemLink     string            `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item"`
-	Menu         map[string]string `long:"menu" short:"m" env:"MENU" env-delim:"," description:"Top menu map (name is title, value is link)"`
-	Active       string            `long:"active" short:"a" env:"ACTIVE" description:"Active title"`
-	Positional   struct {
+	BootstrapURL   string            `long:"bootstrap-url" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"`
+	TemplatePath   string            `long:"template" env:"TEMPLATE" description:"Custom template path. If not set - used default"`
+	ExportTemplate bool              `long:"export-template" env:"EXPORT_TEMPLATE" description:"Export template" `
+	ItemLink       string            `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item"`
+	Menu           map[string]string `long:"menu" short:"m" env:"MENU" env-delim:"," description:"Top menu map (name is title, value is link)"`
+	Active         string            `long:"active" short:"a" env:"ACTIVE" description:"Active title"`
+	Positional     struct {
 		RootDir string `positional-arg-name:"directory" default:"." description:"GoLang files locations"`
 	} `positional-args:"yes"`
 }
@@ -80,7 +81,7 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 			return nil, err
 		}
 	} else {
-		t, err := templ.Parse(string(abu.MustAsset("templates/table.gotemplate")))
+		t, err := templ.Parse(defaultTemplate)
 		if err != nil {
 			return nil, err
 		}
@@ -159,6 +160,11 @@ func (l *List) Execute(args []string) error {
 	// render template
 	err = params.Templ.Execute(preRender, renderParams)
 	if err != nil {
+		return err
+	}
+
+	if l.ExportTemplate {
+		_, err = os.Stdout.Write(preRender.Bytes())
 		return err
 	}
 
@@ -250,6 +256,11 @@ func (l *Page) Execute(args []string) error {
 	// render template
 	err = params.Templ.Execute(preRender, renderParams)
 	if err != nil {
+		return err
+	}
+
+	if l.ExportTemplate {
+		_, err = os.Stdout.Write(preRender.Bytes())
 		return err
 	}
 
