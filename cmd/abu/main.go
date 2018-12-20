@@ -142,8 +142,9 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 }
 
 type List struct {
-	MaxLimit     int `long:"max-limit" env:"MAX_LIMIT" description:"Maximum value of limit" default:"50"`
-	DefaultLimit int `long:"default-limit" env:"DEFAULT_LIMIT" description:"Default limit" default:"20"`
+	MaxLimit     int    `long:"max-limit" env:"MAX_LIMIT" description:"Maximum value of limit" default:"50"`
+	DefaultLimit int    `long:"default-limit" env:"DEFAULT_LIMIT" description:"Default limit" default:"20"`
+	Query        string `long:"query" env:"QUERY" description:"Query placeholder. If not specified - not supported"`
 	common
 }
 
@@ -168,7 +169,7 @@ func (l *List) Execute(args []string) error {
 		return err
 	}
 
-	code, err := createListHandler(params.Sym, preRender.String(), l.MaxLimit, l.DefaultLimit)
+	code, err := createListHandler(params.Sym, preRender.String(), l.MaxLimit, l.DefaultLimit, l.Query != "")
 	if err != nil {
 		return err
 	}
@@ -182,9 +183,15 @@ type renderListParams struct {
 	commonParams
 }
 
-func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultLimit int) (jen.Code, error) {
+func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultLimit int, query bool) (jen.Code, error) {
 	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
-	inType := jen.Func().Params(jen.Id("offset").Int64(), jen.Id("limit").Int64()).Params(jen.Index().Op("*").Qual(sym.Import.Import, sym.Name), jen.Error())
+	inType := jen.Func().ParamsFunc(func(params *jen.Group) {
+		params.Id("offset").Int64()
+		params.Id("limit").Int64()
+		if query {
+			params.Id("query").String()
+		}
+	}).Params(jen.Index().Op("*").Qual(sym.Import.Import, sym.Name), jen.Error())
 	return jen.Func().Id("HandlerList" + sym.Name).Params(jen.Id("provider").Add(inType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
 		group.Const().Id("templateData").Op("=").Lit(preRender)
 		group.Const().Id("maxLimit").Op("=").Lit(maxLimit)
@@ -198,9 +205,16 @@ func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultL
 			strct.Id("Prev").Int64()
 			strct.Id("Num").Int64()
 			strct.Id("Data").Index().Op("*").Qual(sym.Import.Import, sym.Name)
+			if query {
+				strct.Id("Query").String()
+			}
 		})
 		group.Return(jen.Add(handlerFuncType).BlockFunc(func(handler *jen.Group) {
 			handler.Defer().Id("rq").Dot("Body").Dot("Close").Call()
+			if query {
+				handler.Id("query").Op(":=").Id("rq").Dot("FormValue").Call(jen.Lit("query"))
+			}
+
 			handler.Id("offTxt").Op(":=").Id("rq").Dot("FormValue").Call(jen.Lit("offset"))
 			handler.List(jen.Id("offset"), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("offTxt"), jen.Lit(10), jen.Lit(64))
 			handler.If(jen.Err().Op("!=").Nil()).Block(jen.Id("offset").Op("=").Lit(0))
@@ -217,7 +231,13 @@ func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultL
 			handler.Id("prev").Op(":=").Id("offset").Op("-").Id("limit")
 			handler.If(jen.Id("prev").Op("<").Lit(0)).Block(jen.Id("prev").Op("=").Lit(0))
 
-			handler.List(jen.Id("data"), jen.Err()).Op(":=").Id("provider").Call(jen.Id("offset"), jen.Id("limit"))
+			handler.List(jen.Id("data"), jen.Err()).Op(":=").Id("provider").CallFunc(func(call *jen.Group) {
+				call.Id("offset")
+				call.Id("limit")
+				if query {
+					call.Id("query")
+				}
+			})
 			handler.If(jen.Err().Op("!=").Nil()).BlockFunc(func(errGroup *jen.Group) {
 				errGroup.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-list]"), jen.Err())
 				errGroup.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Err().Dot("Error").Call(), jen.Qual("net/http", "StatusBadGateway"))
@@ -227,7 +247,21 @@ func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultL
 
 			handler.Id("rw").Dot("Header").Call().Dot("Set").Call(jen.Lit("Content-Type"), jen.Lit("text/html"))
 			handler.Id("rw").Dot("WriteHeader").Call(jen.Qual("net/http", "StatusOK"))
-			handler.Id("tpl").Dot("Execute").Call(jen.Id("rw"), jen.Op("&").Id("params").Values(jen.Id("limit"), jen.Id("offset"), jen.Id("next"), jen.Id("prev"), jen.Id("num"), jen.Id("data")))
+
+			handler.Id("tpl").Dot("Execute").CallFunc(func(call *jen.Group) {
+				call.Id("rw")
+				call.Op("&").Id("params").ValuesFunc(func(values *jen.Group) {
+					values.Id("limit")
+					values.Id("offset")
+					values.Id("next")
+					values.Id("prev")
+					values.Id("num")
+					values.Id("data")
+					if query {
+						values.Id("query")
+					}
+				})
+			})
 		}))
 	}), nil
 }

@@ -26,6 +26,20 @@
         <br/>
         <h1 class="text-center">{{.Params.Title}}</h1>
     {{- end}}
+    {{- if .Params.Query}}
+        <br/>
+        <form method="get">
+            <div class="input-group mb-3">
+                <input type="hidden" name="offset" value="{{".Offset" | gtpl}}"/>
+                <input type="hidden" name="limit" value="{{".Limit" | gtpl}}"/>
+                <input type="text" name="query" class="form-control" placeholder="{{.Params.Query}}"
+                       value="{{".Query" | gtpl}}">
+                <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" type="submit">search</button>
+                </div>
+            </div>
+        </form>
+    {{- end}}
     <br/>
     <table class="table table-striped {{- if $.Params.ItemLink}}table-hover{{end}}">
         <thead>
@@ -57,11 +71,13 @@
     <nav>
         <ul class="pagination justify-content-center">
             <li class="page-item {{"{{"}}if le .Offset 0{{"}}"}}disabled{{$end}}">
-                <a class="page-link" href="?offset={{".Prev" | gtpl }}&limit={{".Limit" | gtpl }}"
+                <a class="page-link"
+                   href="?offset={{".Prev" | gtpl }}&limit={{".Limit" | gtpl }}{{if .Params.Query}}&query={{".Query" | gtpl}}{{end}}"
                    tabindex="-1">Previous</a>
             </li>
             <li class="page-item {{"if lt .Num .Limit" | gtpl }}disabled{{$end}}">
-                <a class="page-link" href="?offset={{".Next" | gtpl }}&limit={{".Limit" | gtpl }}">Next</a>
+                <a class="page-link"
+                   href="?offset={{".Next" | gtpl }}&limit={{".Limit" | gtpl }}{{if .Params.Query}}&query={{".Query" | gtpl}}{{end}}">Next</a>
             </li>
         </ul>
     </nav>
