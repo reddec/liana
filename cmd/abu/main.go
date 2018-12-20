@@ -37,7 +37,7 @@ type common struct {
 	Exclude         []string `long:"exclude" short:"e" env:"EXCLUDE" env-delim:"," description:"Exclude fields. If set then all fields will be used except specified, otherwise - everything. Conflicts with FIELDS parameter"`
 	SymbolScanLimit int      `long:"symbol-scan-limit" env:"SYMBOL_SCAN_LIMIT" description:"Limit to scan for an imports" default:"-1"`
 	// ui features
-	BootstrapURL   string            `long:"bootstrap-url" short:"B" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"`
+	BootstrapURL   string            `long:"bootstrap-url" short:"B" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://bootswatch.com/4/superhero/bootstrap.min.css"`
 	TemplatePath   string            `long:"template" env:"TEMPLATE" description:"Custom template path. If not set - used default"`
 	ExportTemplate bool              `long:"export-template" env:"EXPORT_TEMPLATE" description:"Export template" `
 	ItemLink       string            `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item"`
