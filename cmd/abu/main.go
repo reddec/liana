@@ -268,7 +268,7 @@ func createPageHandler(sym *symbols.Symbol, preRender string, keyType string, pa
 	case "string":
 		parser = jen.Id("key").Op(":=").Id("param")
 	case "int64":
-		parser = jen.List(jen.Id("key"), jen.Err()).Qual("strconv", "ParseInt").Call(jen.Id("param"), jen.Lit(10), jen.Lit(64)).Line().If(jen.Err().Op("!=").Nil()).BlockFunc(func(group *jen.Group) {
+		parser = jen.List(jen.Id("key"), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("param"), jen.Lit(10), jen.Lit(64)).Line().If(jen.Err().Op("!=").Nil()).BlockFunc(func(group *jen.Group) {
 			group.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-page]"), jen.Err())
 			group.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Err().Dot("Error").Call(), jen.Qual("net/http", "StatusBadRequest"))
 			group.Return()
