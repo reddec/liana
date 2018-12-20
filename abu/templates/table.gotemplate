@@ -32,7 +32,7 @@
             <div class="input-group mb-3">
                 <input type="hidden" name="offset" value="{{".Offset" | gtpl}}"/>
                 <input type="hidden" name="limit" value="{{".Limit" | gtpl}}"/>
-                <input type="text" name="query" class="form-control" placeholder="{{.Params.Query}}"
+                <input type="text" name="query" class="form-control bg-dark" placeholder="{{.Params.Query}}"
                        value="{{".Query" | gtpl}}">
                 <div class="input-group-append">
                     <button class="btn btn-outline-secondary" type="submit">search</button>

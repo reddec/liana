@@ -1,4 +1,4 @@
 package abu
 
-//go:generate go-bindata -pkg abu templates/
+//go:generate go-bindata -pkg abu templates/ static/
 func init() {}

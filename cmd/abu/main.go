@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -19,6 +20,7 @@ import (
 var config struct {
 	List List `command:"list" description:"generate page for tables"`
 	Page Page `command:"page" description:"generate page for single item"`
+	CSS  CSS  `command:"css" description:"make css static handler"`
 }
 
 func main() {
@@ -34,14 +36,14 @@ type common struct {
 	Fields          []string `long:"field" short:"f" env:"FIELD" env-delim:"," description:"Fields to include. If set only this fields will be used otherwise - everything. Conflicts with EXCLUDE parameter"`
 	Exclude         []string `long:"exclude" short:"e" env:"EXCLUDE" env-delim:"," description:"Exclude fields. If set then all fields will be used except specified, otherwise - everything. Conflicts with FIELDS parameter"`
 	SymbolScanLimit int      `long:"symbol-scan-limit" env:"SYMBOL_SCAN_LIMIT" description:"Limit to scan for an imports" default:"-1"`
-	Package         string   `long:"package" env:"PACKAGE" description:"Package name (default is current)"`
 	// ui features
-	BootstrapURL   string            `long:"bootstrap-url" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"`
+	BootstrapURL   string            `long:"bootstrap-url" short:"B" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"`
 	TemplatePath   string            `long:"template" env:"TEMPLATE" description:"Custom template path. If not set - used default"`
 	ExportTemplate bool              `long:"export-template" env:"EXPORT_TEMPLATE" description:"Export template" `
 	ItemLink       string            `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item"`
 	Menu           map[string]string `long:"menu" short:"m" env:"MENU" env-delim:"," description:"Top menu map (name is title, value is link)"`
 	Active         string            `long:"active" short:"a" env:"ACTIVE" description:"Active title"`
+	Package        string            `long:"package" env:"PACKAGE" description:"Package name (default is current)"`
 	Positional     struct {
 		RootDir string `positional-arg-name:"directory" default:"." description:"GoLang files locations"`
 	} `positional-args:"yes"`
@@ -392,4 +394,29 @@ func createPageHandler(sym *symbols.Symbol, preRender string, keyType string, pa
 			handler.Id("tpl").Dot("Execute").Call(jen.Id("rw"), jen.Op("&").Id("params").Values(jen.Id("key"), jen.Id("data")))
 		}))
 	}), nil
+}
+
+type CSS struct {
+	Package string `long:"package" env:"PACKAGE" description:"Package name" required:"yes"`
+}
+
+func (c *CSS) Execute([]string) error {
+	var out *jen.File
+	out = jen.NewFile(c.Package)
+	out.Add(createCssHandler(string(abu.MustAsset("static/bootstrap.min.css"))))
+	return out.Render(os.Stdout)
+}
+
+func createCssHandler(data string) jen.Code {
+	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
+	return jen.Func().Id("StaticCSS").Params().Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
+		group.Const().Id("css").Op("=").Lit(data)
+		group.Return(jen.Add(handlerFuncType).BlockFunc(func(handler *jen.Group) {
+			handler.Defer().Id("rq").Dot("Body").Dot("Close").Call()
+			handler.Id("rw").Dot("Header").Call().Dot("Set").Call(jen.Lit("Content-Type"), jen.Lit("text/css"))
+			handler.Id("rw").Dot("Header").Call().Dot("Set").Call(jen.Lit("Content-Length"), jen.Lit(strconv.Itoa(len(data))))
+			handler.Id("rw").Dot("WriteHeader").Call(jen.Qual("net/http", "StatusOK"))
+			handler.Id("rw").Dot("Write").Call(jen.Index().Byte().Call(jen.Id("css")))
+		}))
+	})
 }
