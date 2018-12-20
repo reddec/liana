@@ -52,14 +52,27 @@
         <tbody>
         {{"- range .Data" | gtpl}}
         <tr>
-            {{- range $field := .Fields}}
-                {{- if $.Params.ItemLink}}
-                    <td>
-                        <a href="{{$.Params.ItemLink}}">{{"{{"}}.{{$field}}{{"}}"}}</a>
-                    </td>
-                {{- else}}
-                    <td>{{"{{"}}.{{$field}}{{"}}"}}</td>
-                {{- end}}
+            {{- range $index, $field := .Fields}}
+
+                <td>
+                    {{- if $.Params.ItemLink}}
+                    <a href="{{$.Params.ItemLink}}">
+                        {{- end}}
+                        {{- $type := index $.Types $index -}}
+                        {{- if and (not $type.BuiltIn) (isType $type "time" "Time")}}
+                            {{"{{"}}.{{$field}}.Format "2 Jan 2006 15:04:05 -0700 MST"{{"}}"}}
+                        {{- else if and $type.BuiltIn (eq $type.Name "bool")}}
+                            {{"{{if "}}.{{$field}}{{"}}"}}
+                            ✓
+                            {{"else"|gtpl}}
+                            {{$end}}
+                        {{- else}}
+                            {{"{{"}}.{{$field}}{{"}}"}}
+                        {{- end}}
+                        {{- if $.Params.ItemLink}}
+                    </a>
+                    {{- end}}
+                </td>
             {{- end}}
         </tr>
         {{$end}}

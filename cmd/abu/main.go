@@ -11,6 +11,7 @@ import (
 	"github.com/reddec/symbols"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
 	"text/template"
 )
@@ -47,6 +48,7 @@ type common struct {
 }
 
 type commonParams struct {
+	Types   []*symbols.Symbol
 	Fields  []string
 	Titles  []string
 	Templ   *template.Template
@@ -67,9 +69,30 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 	for _, f := range c.Exclude {
 		blackList[f] = true
 	}
-
 	funcs := sprig.TxtFuncMap()
 	funcs["gtpl"] = func(txt string) string { return "{{" + txt + "}}" }
+	funcs["unref"] = func(rf interface{}) interface{} {
+		if rf == nil {
+			return nil
+		}
+		v := reflect.ValueOf(rf)
+		if v.IsNil() {
+			return nil
+		}
+		if v.Type().Kind() == reflect.Ptr {
+			return v.Elem().Interface()
+		}
+		return rf
+	}
+	funcs["isType"] = func(sm *symbols.Symbol, importPackage, name string) bool {
+		if sm.BuiltIn {
+			return false
+		}
+		if sm.Name != name {
+			return false
+		}
+		return sm.Import.Import == importPackage
+	}
 	var templ = template.New("").Funcs(funcs)
 	if c.TemplatePath != "" {
 		data, err := ioutil.ReadFile(c.TemplatePath)
@@ -98,7 +121,7 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 		return nil, err
 	}
 
-	fields, err := sym.FieldsNames()
+	fields, err := sym.Fields(proj)
 	if err != nil {
 		return nil, err
 	}
@@ -106,21 +129,23 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 	var (
 		fieldsRender []string
 		titleRender  []string
+		fieldTypes   []*symbols.Symbol
 	)
 	for _, f := range fields {
 		if len(whiteList) > 0 {
 			// only selected
-			if !whiteList[f] {
+			if !whiteList[f.Name] {
 				continue
 			}
 		} else if len(blackList) > 0 {
 			// all except blocked
-			if blackList[f] {
+			if blackList[f.Name] {
 				continue
 			}
 		}
-		fieldsRender = append(fieldsRender, f)
-		titleRender = append(titleRender, strings.Join(camelcase.Split(f), " "))
+		fieldsRender = append(fieldsRender, f.Name)
+		titleRender = append(titleRender, strings.Join(camelcase.Split(f.Name), " "))
+		fieldTypes = append(fieldTypes, f.Type)
 	}
 	if len(fieldsRender) == 0 {
 		return nil, errors.New("no fields to render")
@@ -132,8 +157,9 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 		out = jen.NewFile(c.Package)
 	}
 	return &commonParams{
-		Fields:  fields,
+		Fields:  fieldsRender,
 		Titles:  titleRender,
+		Types:   fieldTypes,
 		Project: proj,
 		Sym:     sym,
 		Templ:   templ,
