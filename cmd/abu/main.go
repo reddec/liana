@@ -20,6 +20,7 @@ import (
 var config struct {
 	List List `command:"list" description:"generate page for tables"`
 	Page Page `command:"page" description:"generate page for single item"`
+	Form Form `command:"form" description:"generate form for single item"`
 	CSS  CSS  `command:"css" description:"make css static handler"`
 }
 
@@ -336,18 +337,9 @@ func (l *Page) Execute(args []string) error {
 }
 
 func createPageHandler(sym *symbols.Symbol, preRender string, keyType string, pattern string) (jen.Code, error) {
-	var parser jen.Code
-	switch keyType {
-	case "string":
-		parser = jen.Id("key").Op(":=").Id("param")
-	case "int64":
-		parser = jen.List(jen.Id("key"), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("param"), jen.Lit(10), jen.Lit(64)).Line().If(jen.Err().Op("!=").Nil()).BlockFunc(func(group *jen.Group) {
-			group.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-page]"), jen.Err())
-			group.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Err().Dot("Error").Call(), jen.Qual("net/http", "StatusBadRequest"))
-			group.Return()
-		})
-	default:
-		return nil, errors.New("unknown key type")
+	parser, err := keyParser(keyType, sym.Name+"-page")
+	if err != nil {
+		return nil, err
 	}
 	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
 	inType := jen.Func().Params(jen.Id("key").Id(keyType)).Params(jen.Op("*").Qual(sym.Import.Import, sym.Name), jen.Error())
@@ -394,6 +386,219 @@ func createPageHandler(sym *symbols.Symbol, preRender string, keyType string, pa
 			handler.Id("tpl").Dot("Execute").Call(jen.Id("rw"), jen.Op("&").Id("params").Values(jen.Id("key"), jen.Id("data")))
 		}))
 	}), nil
+}
+
+func keyParser(keyType string, errCaption string) (jen.Code, error) {
+	var parser jen.Code
+	switch keyType {
+	case "string":
+		parser = jen.Id("key").Op(":=").Id("param")
+	case "int64":
+		parser = jen.List(jen.Id("key"), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("param"), jen.Lit(10), jen.Lit(64)).Line().If(jen.Err().Op("!=").Nil()).BlockFunc(func(group *jen.Group) {
+			group.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Err())
+			group.Qual("net/http", "Error").Call(jen.Id("rw"), jen.Err().Dot("Error").Call(), jen.Qual("net/http", "StatusBadRequest"))
+			group.Return()
+		})
+	default:
+		return nil, errors.New("unknown key type")
+	}
+	return parser, nil
+}
+
+type Form struct {
+	common
+	Redirect       string `long:"redirect" env:"REDIRECT" description:"To what page redirect after success"`
+	SuccessMessage string `long:"success-message" env:"SUCCESS_MESSAGE" description:"Success message" default:"Success"`
+}
+type renderFormParams struct {
+	commonParams
+	Params Form
+}
+
+func (f *Form) Execute(args []string) error {
+	params, err := f.prepare(args, string(abu.MustAsset("templates/form.gotemplate")))
+	if err != nil {
+		return err
+	}
+	// check that only simple type
+	for idx, fieldType := range params.Types {
+		name := params.Fields[idx]
+		if fieldType.Is("time", "Time") || fieldType.Is("time", "Duration") {
+			continue
+		}
+		if !fieldType.BuiltIn {
+			return errors.Errorf("field %v is not built-in type. Custom types except time.Time and time.Duration are not yet supported", name)
+		}
+		if fieldType.IsStructDefinition() {
+			return errors.Errorf("field %v: struct as field type not yet supported", name)
+		}
+		if fieldType.IsMap() {
+			return errors.Errorf("field %v: map as field type not yet supported", name)
+		}
+		if fieldType.Name == "error" {
+			return errors.Errorf("field %v: error as field type not yet supported", name)
+		}
+		if fieldType.IsArray() {
+			return errors.Errorf("field %v: array as field type not yet supported", name)
+		}
+	}
+	renderParams := renderFormParams{
+		commonParams: *params,
+		Params:       *f,
+	}
+	preRender := &bytes.Buffer{}
+	// render template
+	err = params.Templ.Execute(preRender, renderParams)
+	if err != nil {
+		return err
+	}
+
+	if f.ExportTemplate {
+		_, err = os.Stdout.Write(preRender.Bytes())
+		return err
+	}
+
+	code := createFormHandler(preRender.String(), params.Sym, params.Fields, params.Types, f.Redirect, f.SuccessMessage)
+	out := params.file
+	out.Add(code)
+	return out.Render(os.Stdout)
+}
+
+func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []string, fieldTypes []*symbols.Symbol, redirect string, successMsg string) jen.Code {
+	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
+	providerType := jen.Func().ParamsFunc(func(fn *jen.Group) {
+		fn.Id("item").Op("*").Qual(sym.Import.Import, sym.Name)
+	}).Error()
+	return jen.Func().Id("HandlerForm" + sym.Name).Params(jen.Id("provider").Add(providerType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
+		group.Const().Id("templateData").Op("=").Lit(preRender)
+		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Parse").Call(jen.Id("templateData"))
+		group.If(jen.Err().Op("!=").Nil()).Block(jen.Panic(jen.Err()))
+		group.Type().Id("params").StructFunc(func(strct *jen.Group) {
+			strct.Id("Error").Error()
+			strct.Id("Success").String()
+			strct.Id("Data").Op("*").Qual(sym.Import.Import, sym.Name)
+		})
+		group.Return(jen.Add(handlerFuncType).BlockFunc(func(handler *jen.Group) {
+			handler.Defer().Id("rq").Dot("Body").Dot("Close").Call()
+			handler.Var().Id("renderParams").Id("params")
+			handler.Var().Id("item").Qual(sym.Import.Import, sym.Name)
+			handler.Var().Id("status").Op("=").Qual("net/http", "StatusOK")
+			// parser
+			handler.If(jen.Id("rq").Dot("Method").Op("==").Qual("net/http", "MethodPost")).BlockFunc(func(parser *jen.Group) {
+
+				parser.Var().Id("errorsText").Index().String()
+				for index, name := range fieldNames {
+					fType := fieldTypes[index]
+					switch fType.Name {
+					case "int":
+						parser.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "Atoi").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)))
+						parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+							notParsed.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-form]"), jen.Lit(name), jen.Err())
+							notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+						})
+					case "int8":
+						parser.Add(parseFormIntField(sym.Name+"-form", name, 8))
+					case "int16":
+						parser.Add(parseFormIntField(sym.Name+"-form", name, 16))
+					case "int32":
+						parser.Add(parseFormIntField(sym.Name+"-form", name, 32))
+					case "int64":
+						parser.Add(parseFormIntField(sym.Name+"-form", name, 64))
+					case "uint":
+						parser.List(jen.Id("_"+name+"_u64"), jen.Err()).Op(":=").Qual("strconv", "ParseUint").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(64)).Line().
+							If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+							notParsed.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-form]"), jen.Lit(name), jen.Err())
+							notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+						})
+						parser.Id(name).Op(":=").Uint().Call(jen.Id("_" + name + "_u64"))
+					case "uint8":
+						parser.Add(parseFormUIntField(sym.Name+"-form", name, 8))
+					case "uint16":
+						parser.Add(parseFormUIntField(sym.Name+"-form", name, 16))
+					case "uint32":
+						parser.Add(parseFormUIntField(sym.Name+"-form", name, 32))
+					case "uint64":
+						parser.Add(parseFormUIntField(sym.Name+"-form", name, 64))
+					case "float32":
+						parser.Add(parseFormFloatField(sym.Name+"-form", name, 32))
+					case "float64":
+						parser.Add(parseFormFloatField(sym.Name+"-form", name, 64))
+					case "bool":
+						parser.Id(name).Op(":=").Id("rq").Dot("FormValue").Call(jen.Lit(name)).Op("==").Lit("on")
+					case "Time":
+						parser.List(jen.Id(name), jen.Err()).Op(":=").Qual("time", "Parse").Call(jen.Lit("2006-01-02T15:04"), jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)))
+						parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+							notParsed.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-form]"), jen.Lit(name), jen.Err())
+							notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+						})
+					case "Duration":
+						parser.List(jen.Id(name), jen.Err()).Op(":=").Qual("time", "ParseDuration").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)))
+						parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+							notParsed.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-form]"), jen.Lit(name), jen.Err())
+							notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+						})
+					case "string":
+						parser.Id(name).Op(":=").Id("rq").Dot("FormValue").Call(jen.Lit(name))
+					default:
+						panic("unknown type:" + fType.Name)
+					}
+				}
+				for index, name := range fieldNames {
+					fType := fieldTypes[index]
+					if fType.IsPointer() {
+						parser.Id("item").Dot(name).Op("=").Op("&").Id(name)
+					} else {
+						parser.Id("item").Dot(name).Op("=").Id(name)
+					}
+				}
+				parser.If(jen.Len(jen.Id("errorsText")).Op(">").Lit(0)).BlockFunc(func(notParser *jen.Group) {
+					notParser.Id("status").Op("=").Qual("net/http", "StatusBadRequest")
+					notParser.Err().Op("=").Qual("errors", "New").Call(jen.Qual("strings", "Join").Call(jen.Id("errorsText"), jen.Lit("\n")))
+				}).Else().BlockFunc(func(provider *jen.Group) {
+					provider.Err().Op("=").Id("provider").Call(jen.Op("&").Id("item"))
+				})
+
+				parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(failed *jen.Group) {
+					failed.Id("renderParams").Dot("Error").Op("=").Err()
+				}).Else().BlockFunc(func(success *jen.Group) {
+					if redirect != "" {
+						success.Qual("net/http", "Redirect").Call(jen.Id("rw"), jen.Id("rq"), jen.Lit(redirect), jen.Qual("net/http", "StatusSeeOther"))
+						success.Return()
+					} else {
+						success.Id("renderParams").Dot("Success").Op("=").Lit(successMsg)
+					}
+				})
+			})
+			handler.Id("renderParams").Dot("Data").Op("=").Op("&").Id("item")
+			handler.Id("rw").Dot("Header").Call().Dot("Set").Call(jen.Lit("Content-Type"), jen.Lit("text/html"))
+			handler.Id("rw").Dot("WriteHeader").Call(jen.Id("status"))
+			handler.Id("tpl").Dot("Execute").Call(jen.Id("rw"), jen.Op("&").Id("renderParams"))
+		}))
+	})
+}
+
+func parseFormIntField(errCaption, name string, bits int) jen.Code {
+	return jen.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(bits)).Line().
+		If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+		notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
+		notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+	})
+}
+
+func parseFormFloatField(errCaption, name string, bits int) jen.Code {
+	return jen.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "ParseFloat").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(bits)).Line().
+		If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+		notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
+		notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+	})
+}
+
+func parseFormUIntField(errCaption, name string, bits int) jen.Code {
+	return jen.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "ParseUint").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(bits)).Line().
+		If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+		notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Err())
+		notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+	})
 }
 
 type CSS struct {
