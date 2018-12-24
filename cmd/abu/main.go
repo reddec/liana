@@ -8,6 +8,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 	"github.com/reddec/liana/abu"
+	"github.com/reddec/liana/abu/utils"
 	"github.com/reddec/symbols"
 	"io/ioutil"
 	"os"
@@ -38,14 +39,14 @@ type common struct {
 	Exclude         []string `long:"exclude" short:"e" env:"EXCLUDE" env-delim:"," description:"Exclude fields. If set then all fields will be used except specified, otherwise - everything. Conflicts with FIELDS parameter"`
 	SymbolScanLimit int      `long:"symbol-scan-limit" env:"SYMBOL_SCAN_LIMIT" description:"Limit to scan for an imports" default:"-1"`
 	// ui features
-	BootstrapURL   string            `long:"bootstrap-url" short:"B" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://bootswatch.com/4/superhero/bootstrap.min.css"`
-	TemplatePath   string            `long:"template" env:"TEMPLATE" description:"Custom template path. If not set - used default"`
-	ExportTemplate bool              `long:"export-template" env:"EXPORT_TEMPLATE" description:"Export template" `
-	ItemLink       string            `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item"`
-	Menu           map[string]string `long:"menu" short:"m" env:"MENU" env-delim:"," description:"Top menu map (name is title, value is link)"`
-	Active         string            `long:"active" short:"a" env:"ACTIVE" description:"Active title"`
-	Package        string            `long:"package" env:"PACKAGE" description:"Package name (default is current)"`
-	Positional     struct {
+	BootstrapURL   string `long:"bootstrap-url" short:"B" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://bootswatch.com/4/superhero/bootstrap.min.css"`
+	TemplatePath   string `long:"template" env:"TEMPLATE" description:"Custom template path. If not set - used default"`
+	ExportTemplate bool   `long:"export-template" env:"EXPORT_TEMPLATE" description:"Export template" `
+
+	Menu       map[string]string `long:"menu" short:"m" env:"MENU" env-delim:"," description:"Top menu map (name is title, value is link)"`
+	Active     string            `long:"active" short:"a" env:"ACTIVE" description:"Active title"`
+	Package    string            `long:"package" env:"PACKAGE" description:"Package name (default is current)"`
+	Positional struct {
 		RootDir string `positional-arg-name:"directory" default:"." description:"GoLang files locations"`
 	} `positional-args:"yes"`
 }
@@ -174,6 +175,7 @@ type List struct {
 	MaxLimit     int    `long:"max-limit" env:"MAX_LIMIT" description:"Maximum value of limit" default:"50"`
 	DefaultLimit int    `long:"default-limit" env:"DEFAULT_LIMIT" description:"Default limit" default:"20"`
 	Query        string `long:"query" env:"QUERY" description:"Query placeholder. If not specified - not supported"`
+	ItemLink     string `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item"`
 	common
 }
 
@@ -473,6 +475,9 @@ func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []strin
 		group.Const().Id("templateData").Op("=").Lit(preRender)
 		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Parse").Call(jen.Id("templateData"))
 		group.If(jen.Err().Op("!=").Nil()).Block(jen.Panic(jen.Err()))
+		if redirect != "" {
+			group.List(jen.Id("redirectTpl"), jen.Err()).Op(":=").Qual("text/template", "New").Call(jen.Lit("")).Dot("Parse").Call(jen.Lit(redirect))
+		}
 		group.Type().Id("params").StructFunc(func(strct *jen.Group) {
 			strct.Id("Error").Error()
 			strct.Id("Success").String()
@@ -483,86 +488,19 @@ func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []strin
 			handler.Var().Id("renderParams").Id("params")
 			handler.Var().Id("item").Qual(sym.Import.Import, sym.Name)
 			handler.Var().Id("status").Op("=").Qual("net/http", "StatusOK")
+			handler.Var().Id("err").Error()
 			// parser
+
 			handler.If(jen.Id("rq").Dot("Method").Op("==").Qual("net/http", "MethodPost")).BlockFunc(func(parser *jen.Group) {
-
-				parser.Var().Id("errorsText").Index().String()
-				for index, name := range fieldNames {
-					fType := fieldTypes[index]
-					switch fType.Name {
-					case "int":
-						parser.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "Atoi").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)))
-						parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
-							notParsed.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-form]"), jen.Lit(name), jen.Err())
-							notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
-						})
-					case "int8":
-						parser.Add(parseFormIntField(sym.Name+"-form", name, 8))
-					case "int16":
-						parser.Add(parseFormIntField(sym.Name+"-form", name, 16))
-					case "int32":
-						parser.Add(parseFormIntField(sym.Name+"-form", name, 32))
-					case "int64":
-						parser.Add(parseFormIntField(sym.Name+"-form", name, 64))
-					case "uint":
-						parser.List(jen.Id("_"+name+"_u64"), jen.Err()).Op(":=").Qual("strconv", "ParseUint").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(64)).Line().
-							If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
-							notParsed.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-form]"), jen.Lit(name), jen.Err())
-							notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
-						})
-						parser.Id(name).Op(":=").Uint().Call(jen.Id("_" + name + "_u64"))
-					case "uint8":
-						parser.Add(parseFormUIntField(sym.Name+"-form", name, 8))
-					case "uint16":
-						parser.Add(parseFormUIntField(sym.Name+"-form", name, 16))
-					case "uint32":
-						parser.Add(parseFormUIntField(sym.Name+"-form", name, 32))
-					case "uint64":
-						parser.Add(parseFormUIntField(sym.Name+"-form", name, 64))
-					case "float32":
-						parser.Add(parseFormFloatField(sym.Name+"-form", name, 32))
-					case "float64":
-						parser.Add(parseFormFloatField(sym.Name+"-form", name, 64))
-					case "bool":
-						parser.Id(name).Op(":=").Id("rq").Dot("FormValue").Call(jen.Lit(name)).Op("==").Lit("on")
-					case "Time":
-						parser.List(jen.Id(name), jen.Err()).Op(":=").Qual("time", "Parse").Call(jen.Lit("2006-01-02T15:04"), jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)))
-						parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
-							notParsed.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-form]"), jen.Lit(name), jen.Err())
-							notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
-						})
-					case "Duration":
-						parser.List(jen.Id(name), jen.Err()).Op(":=").Qual("time", "ParseDuration").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)))
-						parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
-							notParsed.Qual("log", "Println").Call(jen.Lit("["+sym.Name+"-form]"), jen.Lit(name), jen.Err())
-							notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
-						})
-					case "string":
-						parser.Id(name).Op(":=").Id("rq").Dot("FormValue").Call(jen.Lit(name))
-					default:
-						panic("unknown type:" + fType.Name)
-					}
-				}
-				for index, name := range fieldNames {
-					fType := fieldTypes[index]
-					if fType.IsPointer() {
-						parser.Id("item").Dot(name).Op("=").Op("&").Id(name)
-					} else {
-						parser.Id("item").Dot(name).Op("=").Id(name)
-					}
-				}
-				parser.If(jen.Len(jen.Id("errorsText")).Op(">").Lit(0)).BlockFunc(func(notParser *jen.Group) {
-					notParser.Id("status").Op("=").Qual("net/http", "StatusBadRequest")
-					notParser.Err().Op("=").Qual("errors", "New").Call(jen.Qual("strings", "Join").Call(jen.Id("errorsText"), jen.Lit("\n")))
-				}).Else().BlockFunc(func(provider *jen.Group) {
-					provider.Err().Op("=").Id("provider").Call(jen.Op("&").Id("item"))
-				})
-
+				parser.Add(utils.FormParser(fieldNames, fieldTypes, sym.Name+"-form"))
+				parser.Err().Op("=").Id("provider").Call(jen.Op("&").Id("item"))
 				parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(failed *jen.Group) {
 					failed.Id("renderParams").Dot("Error").Op("=").Err()
 				}).Else().BlockFunc(func(success *jen.Group) {
 					if redirect != "" {
-						success.Qual("net/http", "Redirect").Call(jen.Id("rw"), jen.Id("rq"), jen.Lit(redirect), jen.Qual("net/http", "StatusSeeOther"))
+						success.Var().Id("buffer").Op("=").Op("&").Qual("bytes", "Buffer").Values()
+						success.Id("redirectTpl").Dot("Execute").Call(jen.Id("buffer"), jen.Id("item"))
+						success.Qual("net/http", "Redirect").Call(jen.Id("rw"), jen.Id("rq"), jen.Id("buffer").Dot("String").Call(), jen.Qual("net/http", "StatusSeeOther"))
 						success.Return()
 					} else {
 						success.Id("renderParams").Dot("Success").Op("=").Lit(successMsg)
@@ -574,30 +512,6 @@ func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []strin
 			handler.Id("rw").Dot("WriteHeader").Call(jen.Id("status"))
 			handler.Id("tpl").Dot("Execute").Call(jen.Id("rw"), jen.Op("&").Id("renderParams"))
 		}))
-	})
-}
-
-func parseFormIntField(errCaption, name string, bits int) jen.Code {
-	return jen.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(bits)).Line().
-		If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
-		notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
-		notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
-	})
-}
-
-func parseFormFloatField(errCaption, name string, bits int) jen.Code {
-	return jen.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "ParseFloat").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(bits)).Line().
-		If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
-		notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
-		notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
-	})
-}
-
-func parseFormUIntField(errCaption, name string, bits int) jen.Code {
-	return jen.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "ParseUint").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(bits)).Line().
-		If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
-		notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Err())
-		notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
 	})
 }
 
