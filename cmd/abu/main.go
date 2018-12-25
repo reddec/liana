@@ -52,13 +52,14 @@ type common struct {
 }
 
 type commonParams struct {
-	Types   []*symbols.Symbol
-	Fields  []string
-	Titles  []string
-	Templ   *template.Template
-	Sym     *symbols.Symbol
-	Project *symbols.Project
-	file    *jen.File
+	Types     []*symbols.Symbol
+	Fields    []string
+	Titles    []string
+	RawFields []*symbols.Field
+	Templ     *template.Template
+	Sym       *symbols.Symbol
+	Project   *symbols.Project
+	file      *jen.File
 }
 
 func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, error) {
@@ -72,6 +73,54 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 	}
 	for _, f := range c.Exclude {
 		blackList[f] = true
+	}
+
+	proj, err := symbols.ProjectByDir(c.Positional.RootDir, c.SymbolScanLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	sym, err := proj.FindLocalSymbol(c.Type)
+	if err != nil {
+		return nil, err
+	}
+
+	fields, err := sym.Fields(proj)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		fieldsRender []string
+		titleRender  []string
+		fieldTypes   []*symbols.Symbol
+		rawFields    []*symbols.Field
+	)
+	for _, f := range fields {
+		if len(whiteList) > 0 {
+			// only selected
+			if !whiteList[f.Name] {
+				continue
+			}
+		} else if len(blackList) > 0 {
+			// all except blocked
+			if blackList[f.Name] {
+				continue
+			}
+		}
+		fieldsRender = append(fieldsRender, f.Name)
+		titleRender = append(titleRender, strings.Join(camelcase.Split(f.Name), " "))
+		fieldTypes = append(fieldTypes, f.Type)
+		rawFields = append(rawFields, f)
+	}
+	if len(fieldsRender) == 0 {
+		return nil, errors.New("no fields to render")
+	}
+	var out *jen.File
+	if c.Package == "" {
+		out = jen.NewFilePathName(proj.Package.Import, proj.Package.Package)
+	} else {
+		out = jen.NewFile(c.Package)
 	}
 	funcs := sprig.TxtFuncMap()
 	funcs["gtpl"] = func(txt string) string { return "{{" + txt + "}}" }
@@ -97,6 +146,10 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 		}
 		return sm.Import.Import == importPackage
 	}
+	funcs["isByteArray"] = func(fieldIndex int) bool {
+		return utils.IsByteArray(rawFields[fieldIndex].Raw.Type)
+	}
+
 	var templ = template.New("").Funcs(funcs)
 	if c.TemplatePath != "" {
 		data, err := ioutil.ReadFile(c.TemplatePath)
@@ -115,59 +168,15 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 		templ = t
 	}
 
-	proj, err := symbols.ProjectByDir(c.Positional.RootDir, c.SymbolScanLimit)
-	if err != nil {
-		return nil, err
-	}
-
-	sym, err := proj.FindLocalSymbol(c.Type)
-	if err != nil {
-		return nil, err
-	}
-
-	fields, err := sym.Fields(proj)
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		fieldsRender []string
-		titleRender  []string
-		fieldTypes   []*symbols.Symbol
-	)
-	for _, f := range fields {
-		if len(whiteList) > 0 {
-			// only selected
-			if !whiteList[f.Name] {
-				continue
-			}
-		} else if len(blackList) > 0 {
-			// all except blocked
-			if blackList[f.Name] {
-				continue
-			}
-		}
-		fieldsRender = append(fieldsRender, f.Name)
-		titleRender = append(titleRender, strings.Join(camelcase.Split(f.Name), " "))
-		fieldTypes = append(fieldTypes, f.Type)
-	}
-	if len(fieldsRender) == 0 {
-		return nil, errors.New("no fields to render")
-	}
-	var out *jen.File
-	if c.Package == "" {
-		out = jen.NewFilePathName(proj.Package.Import, proj.Package.Package)
-	} else {
-		out = jen.NewFile(c.Package)
-	}
 	return &commonParams{
-		Fields:  fieldsRender,
-		Titles:  titleRender,
-		Types:   fieldTypes,
-		Project: proj,
-		Sym:     sym,
-		Templ:   templ,
-		file:    out,
+		Fields:    fieldsRender,
+		Titles:    titleRender,
+		Types:     fieldTypes,
+		RawFields: rawFields,
+		Project:   proj,
+		Sym:       sym,
+		Templ:     templ,
+		file:      out,
 	}, nil
 }
 
@@ -440,7 +449,8 @@ func (f *Form) Execute(args []string) error {
 		if fieldType.Name == "error" {
 			return errors.Errorf("field %v: error as field type not yet supported", name)
 		}
-		if fieldType.IsArray() {
+		rf := params.RawFields[idx]
+		if symbols.IsArray(rf.Raw.Type) && !utils.IsByteArray(rf.Raw.Type) {
 			return errors.Errorf("field %v: array as field type not yet supported", name)
 		}
 	}
@@ -460,13 +470,13 @@ func (f *Form) Execute(args []string) error {
 		return err
 	}
 
-	code := createFormHandler(preRender.String(), params.Sym, params.Fields, params.Types, f.Redirect, f.SuccessMessage)
+	code := createFormHandler(preRender.String(), params.Sym, params.Fields, params.Types, params.RawFields, f.Redirect, f.SuccessMessage)
 	out := params.file
 	out.Add(code)
 	return out.Render(os.Stdout)
 }
 
-func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []string, fieldTypes []*symbols.Symbol, redirect string, successMsg string) jen.Code {
+func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []string, fieldTypes []*symbols.Symbol, fields []*symbols.Field, redirect string, successMsg string) jen.Code {
 	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
 	providerType := jen.Func().ParamsFunc(func(fn *jen.Group) {
 		fn.Id("item").Op("*").Qual(sym.Import.Import, sym.Name)
@@ -492,7 +502,7 @@ func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []strin
 			// parser
 
 			handler.If(jen.Id("rq").Dot("Method").Op("==").Qual("net/http", "MethodPost")).BlockFunc(func(parser *jen.Group) {
-				parser.Add(utils.FormParser(fieldNames, fieldTypes, sym.Name+"-form"))
+				parser.Add(utils.FormParser(fieldNames, fieldTypes, fields, sym.Name+"-form"))
 				parser.Err().Op("=").Id("provider").Call(jen.Op("&").Id("item"))
 				parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(failed *jen.Group) {
 					failed.Id("renderParams").Dot("Error").Op("=").Err()

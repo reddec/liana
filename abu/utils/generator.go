@@ -3,14 +3,49 @@ package utils
 import (
 	"github.com/dave/jennifer/jen"
 	"github.com/reddec/symbols"
+	"go/ast"
 )
 
-func FormParser(fieldNames []string, fieldTypes []*symbols.Symbol, errCaption string) jen.Code {
+func IsByteArray(node ast.Node) bool {
+	return symbols.IsArray(node) && symbols.IsIdent(symbols.ArrayItem(node)) && symbols.ArrayItem(node).(*ast.Ident).Name == "byte"
+}
+func FormParser(fieldNames []string, fieldTypes []*symbols.Symbol, fields []*symbols.Field, errCaption string) jen.Code {
 	return jen.CustomFunc(jen.Options{Multi: true, Close: "\n"}, func(parser *jen.Group) {
 
 		parser.Var().Id("errorsText").Index().String()
 		for index, name := range fieldNames {
 			fType := fieldTypes[index]
+			fRaw := fields[index].Raw.Type
+
+			if IsByteArray(fRaw) {
+				/**
+				if file, _, err := rq.FormFile("Name"); err == nil {
+					data, err := ioutil.ReadAll(file)
+					file.Close()
+				} else {
+					....
+				}
+				*/
+				parser.Var().Id(name).Index().Byte()
+				parser.IfFunc(func(formFile *jen.Group) {
+					formFile.List(jen.Id("file"), jen.Id("_"), jen.Err()).Op(":=").Id("rq").Dot("FormFile").Call(jen.Lit(name))
+					formFile.Err().Op("==").Nil()
+				}).BlockFunc(func(file *jen.Group) {
+					file.List(jen.Id("_data"), jen.Err()).Op(":=").Qual("io/ioutil", "ReadAll").Call(jen.Id("file"))
+					file.Id("file").Dot("Close").Call()
+					file.If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+						notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
+						notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+					}).Else().BlockFunc(func(success *jen.Group) {
+						success.Id(name).Op("=").Id("_data")
+					})
+				}).Else().BlockFunc(func(notParsed *jen.Group) {
+					notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
+					notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+				})
+				continue
+			}
+
 			switch fType.Name {
 			case "int":
 				parser.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "Atoi").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)))

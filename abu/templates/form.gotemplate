@@ -41,7 +41,7 @@
         {{".Success" | gtpl }}
     </div>
     {{$end}}
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         {{"with .Data" | gtpl}}
         <table class="table table-striped">
             {{- range $index, $field := .Titles}}
@@ -51,19 +51,21 @@
                     <td class="col-md-8 col-lg-10">
                         {{- $type := index $.Types $index -}}
                         {{- if and (not $type.BuiltIn) (isType $type "time" "Time")}}
-                        <input type="datetime-local" class="form-control" name="{{$fName}}"
-                               value='{{"{{"}}.{{$fName}}.Format "2006-01-02T15:04"{{"}}"}}'/>
+                            <input type="datetime-local" class="form-control" name="{{$fName}}"
+                                   value='{{"{{"}}.{{$fName}}.Format "2006-01-02T15:04"{{"}}"}}'/>
                         {{- else if and $type.BuiltIn (eq $type.Name "bool")}}
-                        <label class="container-checkbox">
-                            <input type="checkbox" name="{{$fName}}"
-                                   {{"{{ if "}}.{{$fName}}{{"}}"}}checked{{$end}}/>
-                            <span class="checkmark"></span>
-                        </label>
+                            <label class="container-checkbox">
+                                <input type="checkbox" name="{{$fName}}"
+                                       {{"{{ if "}}.{{$fName}}{{"}}"}}checked{{$end}}/>
+                                <span class="checkmark"></span>
+                            </label>
+                        {{- else if ($index | isByteArray)}}
+                            <input type="file" name="{{$fName}}" class="form-control"/>
+                        {{- else}}
+                            <input type="text" class="form-control" name="{{$fName}}"
+                                   value="{{"{{"}}.{{$fName}}{{"}}"}}"/>
+                        {{- end}}
                     </td>
-                    {{- else}}
-                        <input type="text" class="form-control" name="{{$fName}}"
-                               value="{{"{{"}}.{{$fName}}{{"}}"}}"/>
-                    {{- end}}
                 </tr>
 
             {{- end}}
