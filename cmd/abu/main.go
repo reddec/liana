@@ -10,6 +10,8 @@ import (
 	"github.com/reddec/liana/abu"
 	"github.com/reddec/liana/abu/utils"
 	"github.com/reddec/symbols"
+	"gopkg.in/yaml.v2"
+
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -19,10 +21,11 @@ import (
 )
 
 var config struct {
-	List List `command:"list" description:"generate page for tables"`
-	Page Page `command:"page" description:"generate page for single item"`
-	Form Form `command:"form" description:"generate form for single item"`
-	CSS  CSS  `command:"css" description:"make css static handler"`
+	List  List  `command:"list" description:"generate page for tables"`
+	Page  Page  `command:"page" description:"generate page for single item"`
+	Form  Form  `command:"form" description:"generate form for single item"`
+	CSS   CSS   `command:"css" description:"make css static handler"`
+	Batch Batch `command:"batch" description:"execute batch commands"`
 }
 
 func main() {
@@ -32,23 +35,26 @@ func main() {
 	}
 }
 
-type common struct {
-	Title           string   `long:"title" env:"TITLE" description:"Title of page" default:""`
-	Type            string   `long:"type" env:"TYPE" description:"Type name of item (should be imported in a current package)" required:"yes"`
-	Fields          []string `long:"field" short:"f" env:"FIELD" env-delim:"," description:"Fields to include. If set only this fields will be used otherwise - everything. Conflicts with EXCLUDE parameter"`
-	Exclude         []string `long:"exclude" short:"e" env:"EXCLUDE" env-delim:"," description:"Exclude fields. If set then all fields will be used except specified, otherwise - everything. Conflicts with FIELDS parameter"`
-	SymbolScanLimit int      `long:"symbol-scan-limit" env:"SYMBOL_SCAN_LIMIT" description:"Limit to scan for an imports" default:"-1"`
+type Common struct {
+	Title           string   `long:"title" env:"TITLE" description:"Title of page" default:"" yaml:",omitempty"`
+	Type            string   `long:"type" env:"TYPE" description:"Type name of item (should be imported in a current package)" required:"yes" yaml:",omitempty"`
+	Fields          []string `long:"field" short:"f" env:"FIELD" env-delim:"," description:"Fields to include. If set only this fields will be used otherwise - everything. Conflicts with EXCLUDE parameter" yaml:",omitempty"`
+	Exclude         []string `long:"exclude" short:"e" env:"EXCLUDE" env-delim:"," description:"Exclude fields. If set then all fields will be used except specified, otherwise - everything. Conflicts with FIELDS parameter" yaml:",omitempty"`
+	SymbolScanLimit int      `long:"symbol-scan-limit" env:"SYMBOL_SCAN_LIMIT" description:"Limit to scan for an imports" default:"-1" yaml:",omitempty"`
+	Sample          bool     `long:"sample" env:"SAMPLE" description:"Dump config as sample for batch" yaml:",omitempty"`
 	// ui features
-	BootstrapURL   string `long:"bootstrap-url" short:"B" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://bootswatch.com/4/superhero/bootstrap.min.css"`
-	TemplatePath   string `long:"template" env:"TEMPLATE" description:"Custom template path. If not set - used default"`
-	ExportTemplate bool   `long:"export-template" env:"EXPORT_TEMPLATE" description:"Export template" `
+	BootstrapURL   string `long:"bootstrap-url" short:"B" env:"BOOTSTRAP_URL" description:"Bootstrap link for CSS" default:"https://bootswatch.com/4/superhero/bootstrap.min.css" yaml:",omitempty"`
+	TemplatePath   string `long:"template" env:"TEMPLATE" description:"Custom template path. If not set - used default" yaml:",omitempty"`
+	ExportTemplate bool   `long:"export-template" env:"EXPORT_TEMPLATE" description:"Export template"  yaml:",omitempty"`
 
-	Menu       map[string]string `long:"menu" short:"m" env:"MENU" env-delim:"," description:"Top menu map (name is title, value is link)"`
-	Active     string            `long:"active" short:"a" env:"ACTIVE" description:"Active title"`
-	Package    string            `long:"package" env:"PACKAGE" description:"Package name (default is current)"`
+	Menu       map[string]string `long:"menu" short:"m" env:"MENU" env-delim:"," description:"Top menu map (name is title, value is link)" yaml:",omitempty"`
+	Active     string            `long:"active" short:"a" env:"ACTIVE" description:"Active title" yaml:",omitempty"`
+	Package    string            `long:"package" env:"PACKAGE" description:"Package name (default is current)" yaml:",omitempty"`
 	Positional struct {
-		RootDir string `positional-arg-name:"directory" default:"." description:"GoLang files locations"`
-	} `positional-args:"yes"`
+		RootDir string `positional-arg-name:"directory" default:"." description:"GoLang files locations" yaml:",omitempty"`
+	} `positional-args:"yes" yaml:",omitempty"`
+
+	out *jen.File
 }
 
 type commonParams struct {
@@ -62,7 +68,9 @@ type commonParams struct {
 	file      *jen.File
 }
 
-func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, error) {
+var parsedCache = make(map[string]*symbols.Project)
+
+func (c *Common) prepare(args []string, defaultTemplate string) (*commonParams, error) {
 	if len(c.Fields) > 0 && len(c.Exclude) > 0 {
 		return nil, errors.New("fields and exclude parameter are conflicted")
 	}
@@ -75,9 +83,14 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 		blackList[f] = true
 	}
 
-	proj, err := symbols.ProjectByDir(c.Positional.RootDir, c.SymbolScanLimit)
-	if err != nil {
-		return nil, err
+	proj, ok := parsedCache[c.Positional.RootDir]
+	if !ok {
+		prj, err := symbols.ProjectByDir(c.Positional.RootDir, c.SymbolScanLimit)
+		if err != nil {
+			return nil, err
+		}
+		proj = prj
+		parsedCache[c.Positional.RootDir] = proj
 	}
 
 	sym, err := proj.FindLocalSymbol(c.Type)
@@ -167,7 +180,7 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 		}
 		templ = t
 	}
-
+	c.out = out
 	return &commonParams{
 		Fields:    fieldsRender,
 		Titles:    titleRender,
@@ -181,18 +194,33 @@ func (c *common) prepare(args []string, defaultTemplate string) (*commonParams, 
 }
 
 type List struct {
-	MaxLimit     int    `long:"max-limit" env:"MAX_LIMIT" description:"Maximum value of limit" default:"50"`
-	DefaultLimit int    `long:"default-limit" env:"DEFAULT_LIMIT" description:"Default limit" default:"20"`
-	Query        string `long:"query" env:"QUERY" description:"Query placeholder. If not specified - not supported"`
-	ItemLink     string `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item"`
-	common
+	MaxLimit     int    `long:"max-limit" env:"MAX_LIMIT" description:"Maximum value of limit" default:"50" yaml:",omitempty"`
+	DefaultLimit int    `long:"default-limit" env:"DEFAULT_LIMIT" description:"Default limit" default:"20" yaml:",omitempty"`
+	Query        string `long:"query" env:"QUERY" description:"Query placeholder. If not specified - not supported" yaml:",omitempty"`
+	ItemLink     string `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item" yaml:",omitempty"`
+	Common       `yaml:",inline"`
 }
 
 func (l *List) Execute(args []string) error {
-	params, err := l.prepare(args, string(abu.MustAsset("templates/table.gotemplate")))
+	if l.Sample {
+		dec := yaml.NewEncoder(os.Stdout)
+		defer dec.Close()
+		return dec.Encode([]BatchItem{{List: l}})
+	}
+	code, err := l.execute(args)
 	if err != nil {
 		return err
 	}
+	l.out.Add(code)
+	return l.out.Render(os.Stdout)
+}
+
+func (l *List) execute(args []string) (jen.Code, error) {
+	params, err := l.prepare(args, string(abu.MustAsset("templates/table.gotemplate")))
+	if err != nil {
+		return nil, err
+	}
+
 	renderParams := renderListParams{
 		commonParams: *params,
 		Params:       *l,
@@ -201,21 +229,14 @@ func (l *List) Execute(args []string) error {
 	// render template
 	err = params.Templ.Execute(preRender, renderParams)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if l.ExportTemplate {
 		_, err = os.Stdout.Write(preRender.Bytes())
-		return err
+		return nil, err
 	}
-
-	code, err := createListHandler(params.Sym, preRender.String(), l.MaxLimit, l.DefaultLimit, l.Query != "")
-	if err != nil {
-		return err
-	}
-	out := params.file
-	out.Add(code)
-	return out.Render(os.Stdout)
+	return createListHandler(params.Sym, preRender.String(), l.MaxLimit, l.DefaultLimit, l.Query != "")
 }
 
 type renderListParams struct {
@@ -307,7 +328,7 @@ func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultL
 }
 
 type Page struct {
-	common
+	Common  `yaml:",inline"`
 	KeyType string `long:"key-type" env:"KEY_TYPE" description:"Key type" choice:"string" choice:"int64" default:"string"`
 	Pattern string `long:"pattern" env:"PATTERN" description:"Regexp pattern to extract key from URL" default:"([^/]+)$"`
 }
@@ -318,9 +339,23 @@ type renderPageParams struct {
 }
 
 func (l *Page) Execute(args []string) error {
-	params, err := l.prepare(args, string(abu.MustAsset("templates/page.gotemplate")))
+	if l.Sample {
+		dec := yaml.NewEncoder(os.Stdout)
+		defer dec.Close()
+		return dec.Encode([]BatchItem{{Page: l}})
+	}
+	code, err := l.execute(args)
 	if err != nil {
 		return err
+	}
+	l.out.Add(code)
+	return l.out.Render(os.Stdout)
+}
+
+func (l *Page) execute(args []string) (jen.Code, error) {
+	params, err := l.prepare(args, string(abu.MustAsset("templates/page.gotemplate")))
+	if err != nil {
+		return nil, err
 	}
 	renderParams := renderPageParams{
 		commonParams: *params,
@@ -330,21 +365,14 @@ func (l *Page) Execute(args []string) error {
 	// render template
 	err = params.Templ.Execute(preRender, renderParams)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if l.ExportTemplate {
 		_, err = os.Stdout.Write(preRender.Bytes())
-		return err
+		return nil, err
 	}
-
-	code, err := createPageHandler(params.Sym, preRender.String(), l.KeyType, l.Pattern)
-	if err != nil {
-		return err
-	}
-	out := params.file
-	out.Add(code)
-	return out.Render(os.Stdout)
+	return createPageHandler(params.Sym, preRender.String(), l.KeyType, l.Pattern)
 }
 
 func createPageHandler(sym *symbols.Symbol, preRender string, keyType string, pattern string) (jen.Code, error) {
@@ -417,7 +445,7 @@ func keyParser(keyType string, errCaption string) (jen.Code, error) {
 }
 
 type Form struct {
-	common
+	Common         `yaml:",inline"`
 	Redirect       string `long:"redirect" env:"REDIRECT" description:"To what page redirect after success"`
 	SuccessMessage string `long:"success-message" env:"SUCCESS_MESSAGE" description:"Success message" default:"Success"`
 }
@@ -426,10 +454,24 @@ type renderFormParams struct {
 	Params Form
 }
 
-func (f *Form) Execute(args []string) error {
-	params, err := f.prepare(args, string(abu.MustAsset("templates/form.gotemplate")))
+func (l *Form) Execute(args []string) error {
+	if l.Sample {
+		dec := yaml.NewEncoder(os.Stdout)
+		defer dec.Close()
+		return dec.Encode([]BatchItem{{Form: l}})
+	}
+	code, err := l.execute(args)
 	if err != nil {
 		return err
+	}
+	l.out.Add(code)
+	return l.out.Render(os.Stdout)
+}
+
+func (f *Form) execute(args []string) (jen.Code, error) {
+	params, err := f.prepare(args, string(abu.MustAsset("templates/form.gotemplate")))
+	if err != nil {
+		return nil, err
 	}
 	// check that only simple type
 	for idx, fieldType := range params.Types {
@@ -438,20 +480,20 @@ func (f *Form) Execute(args []string) error {
 			continue
 		}
 		if !fieldType.BuiltIn {
-			return errors.Errorf("field %v is not built-in type. Custom types except time.Time and time.Duration are not yet supported", name)
+			return nil, errors.Errorf("field %v is not built-in type. Custom types except time.Time and time.Duration are not yet supported", name)
 		}
 		if fieldType.IsStructDefinition() {
-			return errors.Errorf("field %v: struct as field type not yet supported", name)
+			return nil, errors.Errorf("field %v: struct as field type not yet supported", name)
 		}
 		if fieldType.IsMap() {
-			return errors.Errorf("field %v: map as field type not yet supported", name)
+			return nil, errors.Errorf("field %v: map as field type not yet supported", name)
 		}
 		if fieldType.Name == "error" {
-			return errors.Errorf("field %v: error as field type not yet supported", name)
+			return nil, errors.Errorf("field %v: error as field type not yet supported", name)
 		}
 		rf := params.RawFields[idx]
 		if symbols.IsArray(rf.Raw.Type) && !utils.IsByteArray(rf.Raw.Type) {
-			return errors.Errorf("field %v: array as field type not yet supported", name)
+			return nil, errors.Errorf("field %v: array as field type not yet supported", name)
 		}
 	}
 	renderParams := renderFormParams{
@@ -462,18 +504,15 @@ func (f *Form) Execute(args []string) error {
 	// render template
 	err = params.Templ.Execute(preRender, renderParams)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if f.ExportTemplate {
 		_, err = os.Stdout.Write(preRender.Bytes())
-		return err
+		return nil, err
 	}
 
-	code := createFormHandler(preRender.String(), params.Sym, params.Fields, params.Types, params.RawFields, f.Redirect, f.SuccessMessage)
-	out := params.file
-	out.Add(code)
-	return out.Render(os.Stdout)
+	return createFormHandler(preRender.String(), params.Sym, params.Fields, params.Types, params.RawFields, f.Redirect, f.SuccessMessage), nil
 }
 
 func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []string, fieldTypes []*symbols.Symbol, fields []*symbols.Field, redirect string, successMsg string) jen.Code {
@@ -548,4 +587,55 @@ func createCssHandler(data string) jen.Code {
 			handler.Id("rw").Dot("Write").Call(jen.Index().Byte().Call(jen.Id("css")))
 		}))
 	})
+}
+
+type BatchItem struct {
+	List *List `yaml:",omitempty"`
+	Page *Page `yaml:",omitempty"`
+	Form *Form `yaml:",omitempty"`
+}
+
+type Batch struct {
+	Package    string `long:"package" env:"PACKAGE" description:"Package name (default is current)" yaml:",omitempty"`
+	Positional struct {
+		RootDir string `positional-arg-name:"directory" default:"." description:"GoLang files locations" yaml:",omitempty"`
+	} `positional-args:"yes" yaml:",omitempty"`
+}
+
+func (b *Batch) Execute(args []string) error {
+	proj, err := symbols.ProjectByDir(b.Positional.RootDir, 1)
+	if err != nil {
+		return err
+	}
+
+	var items []BatchItem
+	err = yaml.NewDecoder(os.Stdin).Decode(&items)
+	if err != nil {
+		return err
+	}
+
+	var out *jen.File
+	if b.Package == "" {
+		out = jen.NewFilePathName(proj.Package.Import, proj.Package.Package)
+	} else {
+		out = jen.NewFile(b.Package)
+	}
+
+	for _, item := range items {
+		var err error
+		var code jen.Code
+		if item.List != nil {
+			code, err = item.List.execute(args)
+		} else if item.Page != nil {
+			code, err = item.Page.execute(args)
+		} else if item.Form != nil {
+			code, err = item.Form.execute(args)
+		}
+		if err != nil {
+			return err
+		} else if code != nil {
+			out.Add(code)
+		}
+	}
+	return out.Render(os.Stdout)
 }

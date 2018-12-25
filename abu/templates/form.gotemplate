@@ -15,8 +15,8 @@
         <div class="navbar-expand" id="navbarSupportedContent">
             <ul class="navbar-nav mr-auto">
                 {{- range $title, $ref := $.Params.Menu}}
-                    <li class="nav-item {{if eq $.Params.Active $title}}active{{end}}">
-                        <a class="nav-link" style="color: #f8f9fa" href="{{$ref}}">{{$title}}</a>
+                    <li class="nav-item">
+                        <a class="nav-link {{if eq $.Params.Active $title}}active{{end}}" style="color: #f8f9fa" href="{{$ref}}">{{$title}}</a>
                     </li>
                 {{- end}}
             </ul>
