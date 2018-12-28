@@ -37,6 +37,8 @@ func main() {
 
 type Common struct {
 	Title           string   `long:"title" env:"TITLE" description:"Title of page" default:"" yaml:",omitempty"`
+	Description     string   `long:"description" env:"Description" description:"Description on page" default:"" yaml:",omitempty"`
+	Handler         string   `long:"handler" env:"HANDLER" description:"Handler custom name"  yaml:",omitempty"`
 	Type            string   `long:"type" env:"TYPE" description:"Type name of item (should be imported in a current package)" required:"yes" yaml:",omitempty"`
 	Fields          []string `long:"field" short:"f" env:"FIELD" env-delim:"," description:"Fields to include. If set only this fields will be used otherwise - everything. Conflicts with EXCLUDE parameter" yaml:",omitempty"`
 	Exclude         []string `long:"exclude" short:"e" env:"EXCLUDE" env-delim:"," description:"Exclude fields. If set then all fields will be used except specified, otherwise - everything. Conflicts with FIELDS parameter" yaml:",omitempty"`
@@ -236,7 +238,11 @@ func (l *List) execute(args []string) (jen.Code, error) {
 		_, err = os.Stdout.Write(preRender.Bytes())
 		return nil, err
 	}
-	return createListHandler(params.Sym, preRender.String(), l.MaxLimit, l.DefaultLimit, l.Query != "")
+	name := "HandlerList" + params.Sym.Name
+	if l.Handler != "" {
+		name = l.Handler
+	}
+	return createListHandler(name, params.Sym, preRender.String(), l.MaxLimit, l.DefaultLimit, l.Query != "")
 }
 
 type renderListParams struct {
@@ -244,7 +250,7 @@ type renderListParams struct {
 	commonParams
 }
 
-func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultLimit int, query bool) (jen.Code, error) {
+func createListHandler(name string, sym *symbols.Symbol, preRender string, maxLimit, defaultLimit int, query bool) (jen.Code, error) {
 	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
 	inType := jen.Func().ParamsFunc(func(params *jen.Group) {
 		params.Id("offset").Int64()
@@ -253,7 +259,7 @@ func createListHandler(sym *symbols.Symbol, preRender string, maxLimit, defaultL
 			params.Id("query").String()
 		}
 	}).Params(jen.Index().Op("*").Qual(sym.Import.Import, sym.Name), jen.Error())
-	return jen.Func().Id("HandlerList" + sym.Name).Params(jen.Id("provider").Add(inType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
+	return jen.Func().Id(name).Params(jen.Id("provider").Add(inType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
 		group.Const().Id("templateData").Op("=").Lit(preRender)
 		group.Const().Id("maxLimit").Op("=").Lit(maxLimit)
 		group.Const().Id("defaultLimit").Op("=").Lit(defaultLimit)
@@ -372,17 +378,21 @@ func (l *Page) execute(args []string) (jen.Code, error) {
 		_, err = os.Stdout.Write(preRender.Bytes())
 		return nil, err
 	}
-	return createPageHandler(params.Sym, preRender.String(), l.KeyType, l.Pattern)
+	name := "HandlerPage" + params.Sym.Name
+	if l.Handler != "" {
+		name = l.Handler
+	}
+	return createPageHandler(name, params.Sym, preRender.String(), l.KeyType, l.Pattern)
 }
 
-func createPageHandler(sym *symbols.Symbol, preRender string, keyType string, pattern string) (jen.Code, error) {
+func createPageHandler(name string, sym *symbols.Symbol, preRender string, keyType string, pattern string) (jen.Code, error) {
 	parser, err := keyParser(keyType, sym.Name+"-page")
 	if err != nil {
 		return nil, err
 	}
 	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
 	inType := jen.Func().Params(jen.Id("key").Id(keyType)).Params(jen.Op("*").Qual(sym.Import.Import, sym.Name), jen.Error())
-	return jen.Func().Id("HandlerPage" + sym.Name).Params(jen.Id("provider").Add(inType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
+	return jen.Func().Id(name).Params(jen.Id("provider").Add(inType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
 		group.Const().Id("templateData").Op("=").Lit(preRender)
 		group.Var().Id("pattern").Op("=").Qual("regexp", "MustCompile").Call(jen.Lit(pattern))
 		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Parse").Call(jen.Id("templateData"))
@@ -511,16 +521,19 @@ func (f *Form) execute(args []string) (jen.Code, error) {
 		_, err = os.Stdout.Write(preRender.Bytes())
 		return nil, err
 	}
-
-	return createFormHandler(preRender.String(), params.Sym, params.Fields, params.Types, params.RawFields, f.Redirect, f.SuccessMessage), nil
+	name := "HandlerForm" + params.Sym.Name
+	if f.Handler != "" {
+		name = f.Handler
+	}
+	return createFormHandler(name, preRender.String(), params.Sym, params.Fields, params.Types, params.RawFields, f.Redirect, f.SuccessMessage), nil
 }
 
-func createFormHandler(preRender string, sym *symbols.Symbol, fieldNames []string, fieldTypes []*symbols.Symbol, fields []*symbols.Field, redirect string, successMsg string) jen.Code {
+func createFormHandler(name string, preRender string, sym *symbols.Symbol, fieldNames []string, fieldTypes []*symbols.Symbol, fields []*symbols.Field, redirect string, successMsg string) jen.Code {
 	handlerFuncType := jen.Func().Params(jen.Id("rw").Qual("net/http", "ResponseWriter"), jen.Id("rq").Op("*").Qual("net/http", "Request"))
 	providerType := jen.Func().ParamsFunc(func(fn *jen.Group) {
 		fn.Id("item").Op("*").Qual(sym.Import.Import, sym.Name)
 	}).Error()
-	return jen.Func().Id("HandlerForm" + sym.Name).Params(jen.Id("provider").Add(providerType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
+	return jen.Func().Id(name).Params(jen.Id("provider").Add(providerType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
 		group.Const().Id("templateData").Op("=").Lit(preRender)
 		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Parse").Call(jen.Id("templateData"))
 		group.If(jen.Err().Op("!=").Nil()).Block(jen.Panic(jen.Err()))

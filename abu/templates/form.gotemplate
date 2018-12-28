@@ -24,11 +24,15 @@
     </nav>
 {{- end}}
 <div class="container">
-    {{- if .Params.Title}}
+    {{- if $.Params.Title}}
         <br/>
         {{"with .Data" | gtpl}}
         <h1 class="text-center">{{.Params.Title}}</h1>
         {{- $end}}
+    {{- end}}
+    {{- if $.Params.Description}}
+        <br/>
+        <p>{{$.Params.Description}}</p>
     {{- end}}
     <br/>
     {{"if .Error" | gtpl}}

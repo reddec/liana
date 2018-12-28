@@ -30,6 +30,10 @@
         <h1 class="text-center">{{.Params.Title}}</h1>
         {{- $end}}
     {{- end}}
+    {{- if .Params.Description}}
+        <br/>
+        <p>{{.Params.Description}}</p>
+    {{- end}}
     <br/>
     {{"with .Data" | gtpl}}
     <table class="table table-striped">

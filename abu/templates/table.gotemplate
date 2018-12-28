@@ -26,6 +26,10 @@
         <br/>
         <h1 class="text-center">{{.Params.Title}}</h1>
     {{- end}}
+    {{- if .Params.Description}}
+        <br/>
+        <p>{{.Params.Description}}</p>
+    {{- end}}
     {{- if .Params.Query}}
         <br/>
         <form method="get">
