@@ -64,7 +64,7 @@
                         {{- end}}
                         {{- $type := index $.Types $index -}}
                         {{- if and (not $type.BuiltIn) (isType $type "time" "Time")}}
-                            {{"{{"}}.{{$field}}.Format "2 Jan 2006 15:04:05 MST"{{"}}"}}
+                            {{(print "with ." $field) | gtpl}}{{"{{.Format \"2 Jan 2006 15:04:05 MST\"}}"}}{{$end}}
                         {{- else if and $type.BuiltIn (eq $type.Name "bool")}}
                             {{"{{if "}}.{{$field}}{{"}}"}}
                             ✓
@@ -104,8 +104,6 @@
     td {
         word-break: break-all;
     }
-
-
 </style>
 </body>
 </html>

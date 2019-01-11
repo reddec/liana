@@ -16,7 +16,8 @@
             <ul class="navbar-nav mr-auto">
                 {{- range $title, $ref := $.Params.Menu}}
                     <li class="nav-item">
-                        <a class="nav-link {{if eq $.Params.Active $title}}active{{end}}" style="color: #f8f9fa" href="{{$ref}}">{{$title}}</a>
+                        <a class="nav-link {{if eq $.Params.Active $title}}active{{end}}" style="color: #f8f9fa"
+                           href="{{$ref}}">{{$title}}</a>
                     </li>
                 {{- end}}
             </ul>
@@ -56,7 +57,7 @@
                         {{- $type := index $.Types $index -}}
                         {{- if and (not $type.BuiltIn) (isType $type "time" "Time")}}
                             <input type="datetime-local" class="form-control" name="{{$fName}}"
-                                   value='{{"{{"}}.{{$fName}}.Format "2006-01-02T15:04"{{"}}"}}'/>
+                                   value='{{(print "with ." $fName) | gtpl}}{{"{{.Format \"2006-01-02T15:04\"}}"}}{{$end}}'/>
                         {{- else if and $type.BuiltIn (eq $type.Name "bool")}}
                             <label class="container-checkbox">
                                 <input type="checkbox" name="{{$fName}}"
@@ -145,6 +146,10 @@
         -webkit-transform: rotate(45deg);
         -ms-transform: rotate(45deg);
         transform: rotate(45deg);
+    }
+
+    td {
+        word-break: break-all;
     }
 </style>
 </body>

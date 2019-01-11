@@ -47,7 +47,9 @@
     {{- $end}}
 </div>
 <style>
-
+    td {
+        word-break: break-all;
+    }
 </style>
 </body>
 </html>
