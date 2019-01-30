@@ -263,7 +263,11 @@ func createListHandler(name string, sym *symbols.Symbol, preRender string, maxLi
 		group.Const().Id("templateData").Op("=").Lit(preRender)
 		group.Const().Id("maxLimit").Op("=").Lit(maxLimit)
 		group.Const().Id("defaultLimit").Op("=").Lit(defaultLimit)
-		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Parse").Call(jen.Id("templateData"))
+		group.Id("funcMap").Op(":=").Map(jen.String()).Interface().Values()
+		group.Id("funcMap").Index(jen.Lit("b64")).Op("=").Func().Params(jen.Id("data").Index().Byte()).String().BlockFunc(func(converter *jen.Group) {
+			converter.Return(jen.Qual("encoding/base64", "StdEncoding").Dot("EncodeToString").Call(jen.Id("data")))
+		})
+		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Funcs").Call(jen.Id("funcMap")).Dot("Parse").Call(jen.Id("templateData"))
 		group.If(jen.Err().Op("!=").Nil()).Block(jen.Panic(jen.Err()))
 		group.Type().Id("params").StructFunc(func(strct *jen.Group) {
 			strct.Id("Limit").Int64()
@@ -395,7 +399,11 @@ func createPageHandler(name string, sym *symbols.Symbol, preRender string, keyTy
 	return jen.Func().Id(name).Params(jen.Id("provider").Add(inType)).Params(handlerFuncType).BlockFunc(func(group *jen.Group) {
 		group.Const().Id("templateData").Op("=").Lit(preRender)
 		group.Var().Id("pattern").Op("=").Qual("regexp", "MustCompile").Call(jen.Lit(pattern))
-		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Parse").Call(jen.Id("templateData"))
+		group.Id("funcMap").Op(":=").Map(jen.String()).Interface().Values()
+		group.Id("funcMap").Index(jen.Lit("b64")).Op("=").Func().Params(jen.Id("data").Index().Byte()).String().BlockFunc(func(converter *jen.Group) {
+			converter.Return(jen.Qual("encoding/base64", "StdEncoding").Dot("EncodeToString").Call(jen.Id("data")))
+		})
+		group.List(jen.Id("tpl"), jen.Err()).Op(":=").Qual("html/template", "New").Call(jen.Lit("")).Dot("Funcs").Call(jen.Id("funcMap")).Dot("Parse").Call(jen.Id("templateData"))
 		group.If(jen.Err().Op("!=").Nil()).Block(jen.Panic(jen.Err()))
 		group.Type().Id("params").StructFunc(func(strct *jen.Group) {
 			strct.Id("Key").Id(keyType)

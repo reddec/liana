@@ -70,6 +70,8 @@
                             ✓
                             {{"else"|gtpl}}
                             {{$end}}
+                        {{- else if ($index | isByteArray)}}
+                            {{(print "with ." $field) | gtpl}}<a href="data:text/plain;base64,{{"{{. | b64}}"}}" download="{{index $.Titles $index}}">download</a>{{$end}}
                         {{- else}}
                             {{"{{"}}.{{$field}}{{"}}"}}
                         {{- end}}
