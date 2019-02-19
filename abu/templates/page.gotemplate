@@ -43,7 +43,7 @@
                 <th class="col-md-4 col-lg-2">{{$field}}</th>
                 <td>
                     {{- if ($index | isByteArray)}}
-                        {{(print "with ." $field) | gtpl}}<a href="data:text/plain;base64,{{"{{. | b64}}"}}"
+                        {{(print "with ." (index  $.Fields $index)) | gtpl}}<a href="data:text/plain;base64,{{"{{. | b64}}"}}"
                                                              download="{{$field}}">download</a>{{$end}}
                     {{else}}
                         {{"{{"}}.{{index $.Fields $index}}{{"}}"}}
