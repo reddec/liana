@@ -21,10 +21,10 @@ import (
 )
 
 var config struct {
-	List  List  `command:"list" description:"generate page for tables"`
-	Page  Page  `command:"page" description:"generate page for single item"`
-	Form  Form  `command:"form" description:"generate form for single item"`
-	CSS   CSS   `command:"css" description:"make css static handler"`
+	List  List  `command:"list"  description:"generate page for tables"`
+	Page  Page  `command:"page"  description:"generate page for single item"`
+	Form  Form  `command:"form"  description:"generate form for single item"`
+	CSS   CSS   `command:"css"   description:"make css static handler"`
 	Batch Batch `command:"batch" description:"execute batch commands"`
 }
 
@@ -338,9 +338,10 @@ func createListHandler(name string, sym *symbols.Symbol, preRender string, maxLi
 }
 
 type Page struct {
-	Common  `yaml:",inline"`
-	KeyType string `long:"key-type" env:"KEY_TYPE" description:"Key type" choice:"string" choice:"int64" default:"string"`
-	Pattern string `long:"pattern" env:"PATTERN" description:"Regexp pattern to extract key from URL" default:"([^/]+)$"`
+	Common   `yaml:",inline"`
+	KeyType  string            `long:"key-type" env:"KEY_TYPE" description:"Key type" choice:"string" choice:"int64" default:"string" yaml:"keyType"`
+	Pattern  string            `long:"pattern" env:"PATTERN" description:"Regexp pattern to extract key from URL" default:"([^/]+)$"`
+	ItemLink map[string]string `long:"item-link" env:"ITEM_LINK" description:"Link for item (field name => link template). Supports GoTemplate as root of provided item" yaml:"itemLink,omitempty"`
 }
 
 type renderPageParams struct {
@@ -457,7 +458,7 @@ func keyParser(keyType string, errCaption string) (jen.Code, error) {
 			group.Return()
 		})
 	default:
-		return nil, errors.New("unknown key type")
+		return nil, errors.New("unknown key type " + keyType)
 	}
 	return parser, nil
 }
@@ -642,14 +643,20 @@ func (b *Batch) Execute(args []string) error {
 		out = jen.NewFile(b.Package)
 	}
 
+	sample := "Sample usage:\n\n"
+
 	for _, item := range items {
 		var err error
 		var code jen.Code
 		if item.List != nil {
+
 			code, err = item.List.execute(args)
+			sample += `http.HandleFunc("/` + strings.ToLower(item.List.Type) + "s" + `", nil) // TODO:` + "\n"
 		} else if item.Page != nil {
 			code, err = item.Page.execute(args)
+			sample += `http.HandleFunc("/` + strings.ToLower(item.Page.Type) + `", nil) // TODO:` + "\n"
 		} else if item.Form != nil {
+			sample += `http.HandleFunc("/` + strings.ToLower(item.Form.Type) + "/actionname" + `", nil) // TODO:` + "\n"
 			code, err = item.Form.execute(args)
 		}
 		if err != nil {
@@ -658,5 +665,9 @@ func (b *Batch) Execute(args []string) error {
 			out.Add(code)
 		}
 	}
-	return out.Render(os.Stdout)
+	err = out.Render(os.Stdout)
+	if err == nil {
+		os.Stderr.WriteString(sample)
+	}
+	return err
 }
