@@ -50,6 +50,7 @@ type Common struct {
 	ExportTemplate bool   `long:"export-template" env:"EXPORT_TEMPLATE" description:"Export template"  yaml:",omitempty"`
 
 	Menu       map[string]string `long:"menu" short:"m" env:"MENU" env-delim:"," description:"Top menu map (name is title, value is link)" yaml:",omitempty"`
+	SubMenu    map[string]string `long:"sub-menu" env:"SUB_MENU" env-delim:"," description:"Additional menu" yaml:"submenu,omitempty"`
 	Active     string            `long:"active" short:"a" env:"ACTIVE" description:"Active title" yaml:",omitempty"`
 	Package    string            `long:"package" env:"PACKAGE" description:"Package name (default is current)" yaml:",omitempty"`
 	Positional struct {
@@ -571,14 +572,14 @@ func createFormHandler(name string, preRender string, sym *symbols.Symbol, field
 			handler.Var().Id("renderParams").Id("params")
 			handler.Var().Id("item").Qual(sym.Import.Import, sym.Name)
 			handler.Var().Id("status").Op("=").Qual("net/http", "StatusOK")
-			handler.Var().Id("err").Error()
+
 			// parser
 
 			handler.If(jen.Id("rq").Dot("Method").Op("==").Qual("net/http", "MethodPost")).BlockFunc(func(parser *jen.Group) {
 				parser.Add(utils.FormParser(fieldNames, fieldTypes, fields, sym.Name+"-form"))
-				parser.Err().Op("=").Id("provider").Call(jen.Op("&").Id("item"))
-				parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(failed *jen.Group) {
-					failed.Id("renderParams").Dot("Error").Op("=").Err()
+				parser.Id("errProvider").Op(":=").Id("provider").Call(jen.Op("&").Id("item"))
+				parser.If(jen.Id("errProvider").Op("!=").Nil()).BlockFunc(func(failed *jen.Group) {
+					failed.Id("renderParams").Dot("Error").Op("=").Id("errProvider")
 				}).Else().BlockFunc(func(success *jen.Group) {
 					if redirect != "" {
 						success.Var().Id("buffer").Op("=").Op("&").Qual("bytes", "Buffer").Values()
@@ -679,7 +680,7 @@ func (b *Batch) Execute(args []string) error {
 			code, err = item.Page.execute(args, shims)
 			sample += `http.HandleFunc("/` + strings.ToLower(item.Page.Type) + `/", nil) // TODO:` + "\n"
 		} else if item.Form != nil {
-			sample += `http.HandleFunc("/` + strings.ToLower(item.Form.Type) + "/actionname" + `", nil) // TODO:` + "\n"
+			sample += `http.HandleFunc("/` + strings.ToLower(item.Form.Type) + "s/actionname" + `", nil) // TODO:` + "\n"
 			code, err = item.Form.execute(args, shims)
 		}
 		if err != nil {

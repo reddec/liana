@@ -24,6 +24,21 @@
         </div>
     </nav>
 {{- end}}
+{{- if $.Params.SubMenu}}
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="navbar-expand" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                {{- range $title, $ref := $.Params.SubMenu}}
+                    <li class="nav-item">
+                        {{"with .Data" | gtpl}}
+                        <a class="nav-link" href="{{$ref}}">{{$title}}</a>
+                        {{$end}}
+                    </li>
+                {{- end}}
+            </ul>
+        </div>
+    </nav>
+{{- end}}
 <div class="container">
     {{- if $.Params.Title}}
         <br/>
