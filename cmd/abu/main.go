@@ -654,7 +654,7 @@ func (b *Batch) Execute(args []string) error {
 			sample += `http.HandleFunc("/` + strings.ToLower(item.List.Type) + "s" + `", nil) // TODO:` + "\n"
 		} else if item.Page != nil {
 			code, err = item.Page.execute(args)
-			sample += `http.HandleFunc("/` + strings.ToLower(item.Page.Type) + `", nil) // TODO:` + "\n"
+			sample += `http.HandleFunc("/` + strings.ToLower(item.Page.Type) + `/", nil) // TODO:` + "\n"
 		} else if item.Form != nil {
 			sample += `http.HandleFunc("/` + strings.ToLower(item.Form.Type) + "/actionname" + `", nil) // TODO:` + "\n"
 			code, err = item.Form.execute(args)
