@@ -72,7 +72,7 @@ type commonParams struct {
 
 var parsedCache = make(map[string]*symbols.Project)
 
-func (c *Common) prepare(args []string, defaultTemplate string) (*commonParams, error) {
+func (c *Common) prepare(args []string, defaultTemplate string, shims []*Shim) (*commonParams, error) {
 	if len(c.Fields) > 0 && len(c.Exclude) > 0 {
 		return nil, errors.New("fields and exclude parameter are conflicted")
 	}
@@ -164,6 +164,18 @@ func (c *Common) prepare(args []string, defaultTemplate string) (*commonParams, 
 	funcs["isByteArray"] = func(fieldIndex int) bool {
 		return utils.IsByteArray(rawFields[fieldIndex].Raw.Type)
 	}
+	funcs["shim"] = func(fieldIndex int) string {
+		sm := fieldTypes[fieldIndex]
+		if sm.BuiltIn {
+			return ""
+		}
+		for _, sh := range shims {
+			if sm.Name == sh.Type && sm.Import.Package == sh.Package {
+				return "{{with ." + fieldsRender[fieldIndex] + "}}" + sh.Render + "{{end}}"
+			}
+		}
+		return ""
+	}
 
 	var templ = template.New("").Funcs(funcs)
 	if c.TemplatePath != "" {
@@ -209,7 +221,7 @@ func (l *List) Execute(args []string) error {
 		defer dec.Close()
 		return dec.Encode([]BatchItem{{List: l}})
 	}
-	code, err := l.execute(args)
+	code, err := l.execute(args, nil)
 	if err != nil {
 		return err
 	}
@@ -217,8 +229,8 @@ func (l *List) Execute(args []string) error {
 	return l.out.Render(os.Stdout)
 }
 
-func (l *List) execute(args []string) (jen.Code, error) {
-	params, err := l.prepare(args, string(abu.MustAsset("templates/table.gotemplate")))
+func (l *List) execute(args []string, shims []*Shim) (jen.Code, error) {
+	params, err := l.prepare(args, string(abu.MustAsset("templates/table.gotemplate")), shims)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +367,7 @@ func (l *Page) Execute(args []string) error {
 		defer dec.Close()
 		return dec.Encode([]BatchItem{{Page: l}})
 	}
-	code, err := l.execute(args)
+	code, err := l.execute(args, nil)
 	if err != nil {
 		return err
 	}
@@ -363,8 +375,8 @@ func (l *Page) Execute(args []string) error {
 	return l.out.Render(os.Stdout)
 }
 
-func (l *Page) execute(args []string) (jen.Code, error) {
-	params, err := l.prepare(args, string(abu.MustAsset("templates/page.gotemplate")))
+func (l *Page) execute(args []string, shims []*Shim) (jen.Code, error) {
+	params, err := l.prepare(args, string(abu.MustAsset("templates/page.gotemplate")), shims)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +491,7 @@ func (l *Form) Execute(args []string) error {
 		defer dec.Close()
 		return dec.Encode([]BatchItem{{Form: l}})
 	}
-	code, err := l.execute(args)
+	code, err := l.execute(args, nil)
 	if err != nil {
 		return err
 	}
@@ -487,8 +499,8 @@ func (l *Form) Execute(args []string) error {
 	return l.out.Render(os.Stdout)
 }
 
-func (f *Form) execute(args []string) (jen.Code, error) {
-	params, err := f.prepare(args, string(abu.MustAsset("templates/form.gotemplate")))
+func (f *Form) execute(args []string, shims []*Shim) (jen.Code, error) {
+	params, err := f.prepare(args, string(abu.MustAsset("templates/form.gotemplate")), shims)
 	if err != nil {
 		return nil, err
 	}
@@ -611,10 +623,17 @@ func createCssHandler(data string) jen.Code {
 	})
 }
 
+type Shim struct {
+	Package string
+	Type    string
+	Render  string
+}
+
 type BatchItem struct {
 	List *List `yaml:",omitempty"`
 	Page *Page `yaml:",omitempty"`
 	Form *Form `yaml:",omitempty"`
+	Shim *Shim `yaml:",omitempty"`
 }
 
 type Batch struct {
@@ -644,20 +663,24 @@ func (b *Batch) Execute(args []string) error {
 	}
 
 	sample := "Sample usage:\n\n"
-
+	var shims []*Shim
+	for _, item := range items {
+		if item.Shim != nil {
+			shims = append(shims, item.Shim)
+		}
+	}
 	for _, item := range items {
 		var err error
 		var code jen.Code
 		if item.List != nil {
-
-			code, err = item.List.execute(args)
+			code, err = item.List.execute(args, shims)
 			sample += `http.HandleFunc("/` + strings.ToLower(item.List.Type) + "s" + `", nil) // TODO:` + "\n"
 		} else if item.Page != nil {
-			code, err = item.Page.execute(args)
+			code, err = item.Page.execute(args, shims)
 			sample += `http.HandleFunc("/` + strings.ToLower(item.Page.Type) + `/", nil) // TODO:` + "\n"
 		} else if item.Form != nil {
 			sample += `http.HandleFunc("/` + strings.ToLower(item.Form.Type) + "/actionname" + `", nil) // TODO:` + "\n"
-			code, err = item.Form.execute(args)
+			code, err = item.Form.execute(args, shims)
 		}
 		if err != nil {
 			return err

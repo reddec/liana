@@ -14,7 +14,8 @@
             <ul class="navbar-nav mr-auto">
                 {{- range $title, $ref := $.Params.Menu}}
                     <li class="nav-item">
-                        <a class="nav-link {{if eq $.Params.Active $title}}active{{end}}" style="color: #f8f9fa" href="{{$ref}}">{{$title}}</a>
+                        <a class="nav-link {{if eq $.Params.Active $title}}active{{end}}" style="color: #f8f9fa"
+                           href="{{$ref}}">{{$title}}</a>
                     </li>
                 {{- end}}
             </ul>
@@ -62,19 +63,26 @@
                     {{- if $.Params.ItemLink}}
                     <a href="{{$.Params.ItemLink}}">
                         {{- end}}
-                        {{- $type := index $.Types $index -}}
-                        {{- if and (not $type.BuiltIn) (isType $type "time" "Time")}}
-                            {{(print "with ." $field) | gtpl}}{{"{{.Format \"2 Jan 2006 15:04:05 MST\"}}"}}{{$end}}
-                        {{- else if and $type.BuiltIn (eq $type.Name "bool")}}
-                            {{"{{if "}}.{{$field}}{{"}}"}}
-                            ✓
-                            {{"else"|gtpl}}
-                            {{$end}}
-                        {{- else if ($index | isByteArray)}}
-                            {{(print "with ." $field) | gtpl}}<a href="data:text/plain;base64,{{"{{. | b64}}"}}" download="{{index $.Titles $index}}">download</a>{{$end}}
-                        {{- else}}
-                            {{"{{"}}.{{$field}}{{"}}"}}
-                        {{- end}}
+
+                        {{with shim $index}}
+                            {{.}}
+                        {{else}}
+                            {{- $type := index $.Types $index -}}
+                            {{- if and (not $type.BuiltIn) (isType $type "time" "Time")}}
+                                {{(print "with ." $field) | gtpl}}{{"{{.Format \"2 Jan 2006 15:04:05 MST\"}}"}}{{$end}}
+                            {{- else if and $type.BuiltIn (eq $type.Name "bool")}}
+                                {{"{{if "}}.{{$field}}{{"}}"}}
+                                ✓
+                                {{"else"|gtpl}}
+                                {{$end}}
+                            {{- else if ($index | isByteArray)}}
+                                {{(print "with ." $field) | gtpl}}<a href="data:text/plain;base64,{{"{{. | b64}}"}}"
+                                                                     download="{{index $.Titles $index}}">
+                                    download</a>{{$end}}
+                            {{- else}}
+                                {{"{{"}}.{{$field}}{{"}}"}}
+                            {{- end}}
+                        {{end}}
                         {{- if $.Params.ItemLink}}
                     </a>
                     {{- end}}
