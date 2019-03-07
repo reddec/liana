@@ -199,7 +199,7 @@ type List struct {
 	MaxLimit     int    `long:"max-limit" env:"MAX_LIMIT" description:"Maximum value of limit" default:"50" yaml:",omitempty"`
 	DefaultLimit int    `long:"default-limit" env:"DEFAULT_LIMIT" description:"Default limit" default:"20" yaml:",omitempty"`
 	Query        string `long:"query" env:"QUERY" description:"Query placeholder. If not specified - not supported" yaml:",omitempty"`
-	ItemLink     string `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item" yaml:",omitempty"`
+	ItemLink     string `long:"item-link" env:"ITEM_LINK" description:"Link for item. Supports GoTemplate as root of provied item" yaml:"itemLink,omitempty"`
 	Common       `yaml:",inline"`
 }
 
