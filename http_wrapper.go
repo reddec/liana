@@ -33,6 +33,7 @@ type WrapperParams struct {
 	BypassContext       bool              // optional, when specified pass do not parse context.Context
 	AuthPrefixes        []string          // optional, call auth provider for method with specified prefixes. useful only with BypassContext
 	AuthType            []Auth            // optional, required for auth prefixes - type of auth
+	OptionalAuth        []string          // optional, endpoints where auth is optional
 	NormalizeFieldsName bool              // optional, make first letter in fields in model to lower case
 	CustomErrCode       int               // optional, custom http code for error
 	PreProcessor        bool              // optional, if defined additional function will be invoked right before handler
@@ -76,6 +77,8 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 
 	var result GenerateResult
 	result.Swaggers = make(map[string]*types.Swagger)
+
+	var optionalAuth = ToStringSet(params.OptionalAuth)
 
 	out := jen.NewFilePathName(OutPackagePath, OutPackageName)
 	for _, imp := range params.AdditionalImports {
@@ -130,6 +133,10 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					authRequired = true
 					break
 				}
+			}
+			if !authRequired && optionalAuth[method.Name] {
+				numAuthMethods++
+				authRequired = true
 			}
 			wrappedMethods = append(wrappedMethods, method)
 			argType := "args" + method.Name + "Handler"
@@ -205,28 +212,24 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				group.Id("ctx").Op(":=").Qual("context", "WithValue").Call(jen.Qual("context", "Background").Call(), jen.Lit("method"), jen.Lit(method.Name))
 
 				if authRequired {
-					for _, auth := range params.AuthType {
-						auth.Parse(group)
-					}
-					var authGroup = group.Empty()
-
-					for i, auth := range params.AuthType {
-						if i != 0 {
-							authGroup = authGroup.Else()
+					group.IfFunc(func(ifLogin *jen.Group) {
+						ifLogin.List(jen.Id("nctx"), jen.Id("ok")).Op(":=").Id("h").Dot("tryLogin").Call(
+							jen.Id("ctx"),
+							jen.Id("gctx"),
+							jen.Lit(method.Name),
+							jen.Id("body"),
+						)
+						ifLogin.Op("!").Id("ok")
+					}).BlockFunc(func(failedLogin *jen.Group) {
+						if !optionalAuth[method.Name] {
+							failedLogin.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusUnauthorized"))
+							failedLogin.Return()
+						} else {
+							failedLogin.Comment("do nothing - it's optional auth endpoint")
 						}
-						authGroup = authGroup.IfFunc(func(ifSt *jen.Group) {
-							ifSt.List(jen.Id("nctx"), jen.Id("ok")).Op(":=").Add(auth.ValidateRequest(jen.Id("h"), jen.Id("params"), jen.Id("gctx")))
-							ifSt.Id("ok")
-						}).BlockFunc(func(ifOk *jen.Group) {
-							ifOk.Id("ctx").Op("=").Id("nctx")
-						})
-					}
-					authGroup.Else().BlockFunc(func(ifNotAuth *jen.Group) {
-						ifNotAuth.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("unauthorized request from"), jen.Id("gctx").Dot("Request").Dot("RemoteAddr"))
-						ifNotAuth.Id("gctx").Dot("AbortWithStatus").Call(jen.Qual("net/http", "StatusUnauthorized"))
-						ifNotAuth.Return()
+					}).Else().BlockFunc(func(successLogin *jen.Group) {
+						successLogin.Id("ctx").Op("=").Id("nctx")
 					})
-
 				}
 				call := jen.Id("h").Dot("wrap").Dot(method.Name).CallFunc(func(args *jen.Group) {
 					for _, inParam := range method.In {
@@ -415,7 +418,37 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 			}
 			out.Const().Id("Swagger" + ifs.Name).Op("=").Lit(string(data))
 		}
+		if numAuthMethods > 0 {
+			// ??tryLogin(ctx context.Context, gctx gin.Context, method string, body []byte) (context.Context, bool)
+			out.Comment("general login handler")
+			out.Func().Parens(jen.Id("h").Op("*").Id(typeName)).Id("tryLogin").Params(
+				jen.Id("ctx").Qual("context", "Context"),
+				jen.Id("gctx").Op("*").Qual("github.com/gin-gonic/gin", "Context"),
+				jen.Id("method").String(),
+				jen.Id("body").Index().Byte(),
+			).Params(jen.Qual("context", "Context"), jen.Bool()).BlockFunc(func(login *jen.Group) {
+				for _, auth := range params.AuthType {
+					auth.Parse(login)
+				}
+				var authGroup = login.Empty()
 
+				for i, auth := range params.AuthType {
+					if i != 0 {
+						authGroup = authGroup.Else()
+					}
+					authGroup = authGroup.IfFunc(func(ifSt *jen.Group) {
+						ifSt.List(jen.Id("nctx"), jen.Id("ok")).Op(":=").Add(auth.ValidateRequest(jen.Id("h"), jen.Id("params"), jen.Id("gctx")))
+						ifSt.Id("ok")
+					}).BlockFunc(func(ifOk *jen.Group) {
+						ifOk.Return(jen.Id("nctx"), jen.True())
+					})
+				}
+				authGroup.Else().BlockFunc(func(ifNotAuth *jen.Group) {
+					ifNotAuth.Qual("log", "Println").Call(jen.Lit("["), jen.Id("method"), jen.Lit("]"), jen.Lit("unauthorized request from"), jen.Id("gctx").Dot("Request").Dot("RemoteAddr"))
+					ifNotAuth.Return().List(jen.Id("ctx"), jen.False())
+				})
+			})
+		}
 	}
 
 	buffer := &bytes.Buffer{}

@@ -33,6 +33,7 @@ var (
 	BypassContext      = flag.Bool("bypass-context", false, "Do not parse *context.Context and generate stub for it")
 	AuthPrefixes       = flag.String("auth", "", "Comma separated list prefixes which should be restricted by auth")
 	AuthTypes          = flag.String("auth-type", "JWT", "Comma separated list of supported auth types (JWT, Token, SignedToken)")
+	OptionalAuths      = flag.String("opt-auth", "", "Comma separated list of method names that have optional auth")
 	ErrCode            = flag.Int("err-code", http.StatusBadGateway, "Custom http error code")
 	preProcessor       = flag.Bool("pre", false, "Use pre-handler processor")
 	customMarshaller   = flag.Bool("custom-json", false, "Use custom json marshaller")
@@ -96,6 +97,7 @@ func main() {
 		CustomMarshaller:   *customMarshaller,
 		UseValidator:       *useValidator,
 		RequiredByComment:  *requiredByComment,
+		OptionalAuth:       stringToList(*OptionalAuths),
 	})
 	if err != nil {
 		panic(err)
