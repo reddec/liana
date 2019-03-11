@@ -40,6 +40,7 @@ type WrapperParams struct {
 	CustomMarshaller    bool              // optional, use custom marshaller for JSON
 	UseValidator        bool              // optional, use method Validate() error to check requests
 	RequiredByComment   string            // optional, mark fields as required in swagger if they contain specified keyword
+	ExportLogin         bool              // optional, export login function
 }
 
 // Result of generator
@@ -110,6 +111,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		if params.CustomMarshaller {
 			out.Type().Id("Marshaller" + ifs.Name).Func().Params(jen.Interface()).Parens(jen.List(jen.Index().Byte(), jen.Error()))
 		}
+
 		var numAuthMethods int
 		typeName := "handler" + ifs.Name
 		var ifStructDef *jen.Group
@@ -119,6 +121,18 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				group.Id("lock").Qual("sync", "Locker")
 			}
 			ifStructDef = group
+		})
+		out.Line()
+		publicIface := "Handler" + ifs.Name
+		out.Type().Id(publicIface).InterfaceFunc(func(publicIface *jen.Group) {
+			if params.ExportLogin {
+				publicIface.Id("Login").Params(
+					jen.Id("ctx").Qual("context", "Context"),
+					jen.Id("gctx").Op("*").Qual("github.com/gin-gonic/gin", "Context"),
+					jen.Id("method").String(),
+					jen.Id("body").Index().Byte(),
+				).Params(jen.Qual("context", "Context"), jen.Bool())
+			}
 		})
 		out.Line()
 		var wrappedMethods []*atool.Method
@@ -369,8 +383,8 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		})
 		out.Line()
 		out.Comment("Same as Wrap but allows to use your own Gin instance")
-		out.Func().Id("GinWrap"+ifs.Name).Params(jen.Id("wrapper").Qual(InPackagePath, ifs.Name), jen.Id("router").Qual("github.com/gin-gonic/gin", "IRoutes"), subParams).BlockFunc(func(group *jen.Group) {
-			group.Id("handler").Op(":=").Id(typeName).Values(jen.Id("wrapper"), subCall)
+		out.Func().Id("GinWrap"+ifs.Name).Params(jen.Id("wrapper").Qual(InPackagePath, ifs.Name), jen.Id("router").Qual("github.com/gin-gonic/gin", "IRoutes"), subParams).Id(publicIface).BlockFunc(func(group *jen.Group) {
+			group.Id("handler").Op(":=").Op("&").Id(typeName).Values(jen.Id("wrapper"), subCall)
 			for _, method := range wrappedMethods {
 				var getGenerated bool
 				path := toKebab(method.Name)
@@ -401,6 +415,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					handler.Id("gctx").Dot("Data").Call(jen.Qual("net/http", "StatusOK"), jen.Lit("application/yaml"), jen.Index().Byte().Parens(jen.Id("Swagger"+ifs.Name)))
 				}))
 			}
+			group.Return().Id("handler")
 		})
 
 		if params.EmbeddedSwaggerURL != "" {
@@ -447,6 +462,17 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					ifNotAuth.Qual("log", "Println").Call(jen.Lit("["), jen.Id("method"), jen.Lit("]"), jen.Lit("unauthorized request from"), jen.Id("gctx").Dot("Request").Dot("RemoteAddr"))
 					ifNotAuth.Return().List(jen.Id("ctx"), jen.False())
 				})
+			})
+		}
+		if params.ExportLogin {
+			out.Comment("Login verification")
+			out.Func().Parens(jen.Id("h").Op("*").Id(typeName)).Id("Login").Params(
+				jen.Id("ctx").Qual("context", "Context"),
+				jen.Id("gctx").Op("*").Qual("github.com/gin-gonic/gin", "Context"),
+				jen.Id("method").String(),
+				jen.Id("body").Index().Byte(),
+			).Params(jen.Qual("context", "Context"), jen.Bool()).BlockFunc(func(login *jen.Group) {
+				login.Return(jen.Id("h").Dot("tryLogin").Call(jen.Id("ctx"), jen.Id("gctx"), jen.Id("method"), jen.Id("body")))
 			})
 		}
 	}

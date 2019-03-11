@@ -39,6 +39,7 @@ var (
 	customMarshaller   = flag.Bool("custom-json", false, "Use custom json marshaller")
 	useValidator       = flag.Bool("validator", false, "Use Validate function on request objects")
 	requiredByComment  = flag.String("swagger-required-by-comment", "", "Mark fields in a swagger as required if their comments contain specified keyword")
+	exportLogin        = flag.Bool("export-login", false, "Export Login function")
 )
 
 func main() {
@@ -98,6 +99,7 @@ func main() {
 		UseValidator:       *useValidator,
 		RequiredByComment:  *requiredByComment,
 		OptionalAuth:       stringToList(*OptionalAuths),
+		ExportLogin:        *exportLogin,
 	})
 	if err != nil {
 		panic(err)
