@@ -94,6 +94,12 @@ func FormParser(fieldNames []string, fieldTypes []*symbols.Symbol, fields []*sym
 					notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
 					notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
 				})
+			case "Decimal":
+				parser.List(jen.Id(name), jen.Err()).Op(":=").Qual("github.com/shopspring/decimal", "NewFromString").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)))
+				parser.If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+					notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
+					notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
+				})
 			case "string":
 				parser.Id(name).Op(":=").Id("rq").Dot("FormValue").Call(jen.Lit(name))
 			default:

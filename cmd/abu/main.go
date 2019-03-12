@@ -508,7 +508,7 @@ func (f *Form) execute(args []string, shims []*Shim) (jen.Code, error) {
 	// check that only simple type
 	for idx, fieldType := range params.Types {
 		name := params.Fields[idx]
-		if fieldType.Is("time", "Time") || fieldType.Is("time", "Duration") {
+		if fieldType.Is("time", "Time") || fieldType.Is("time", "Duration") || fieldType.Is("github.com/shopspring/decimal", "Decimal") {
 			continue
 		}
 		if !fieldType.BuiltIn {
