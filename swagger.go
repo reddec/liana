@@ -114,7 +114,12 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 			act.Responses[http.StatusBadRequest] = types.Response{
 				Description: "Request data contains invalid symbols",
 				Schema: &types.Definition{
-					Type: "string",
+					Type: "object",
+					Properties: map[string]*types.Definition{
+						"error": {
+							Type: "string",
+						},
+					},
 				},
 			}
 		}
@@ -127,7 +132,12 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 			act.Responses[usn.WrapperParams.CustomErrCode] = types.Response{
 				Description: "Failed to process request by the handler",
 				Schema: &types.Definition{
-					Type: "string",
+					Type: "object",
+					Properties: map[string]*types.Definition{
+						"error": {
+							Type: "string",
+						},
+					},
 				},
 			}
 		}

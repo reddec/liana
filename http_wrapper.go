@@ -189,7 +189,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					group.List(jen.Id("body"), jen.Err()).Op(":=").Id("gctx").Dot("GetRawData").Call()
 					group.If(jen.Err().Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
 						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed read body:"), jen.Err())
-						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err().Dot("Error").Call())
+						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
 						g.Return()
 					})
 				}
@@ -200,7 +200,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 						ifG.Err().Op("!=").Nil()
 					}).BlockFunc(func(g *jen.Group) {
 						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed to parse arguments:"), jen.Err())
-						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err().Dot("Error").Call())
+						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
 						g.Return()
 					})
 				}
@@ -218,7 +218,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 							valid.Err().Op("!=").Nil()
 						}).BlockFunc(func(notValid *jen.Group) {
 							notValid.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("validation failed:"), jen.Err())
-							notValid.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Err().Dot("Error").Call())
+							notValid.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
 							notValid.Return()
 						})
 					}
@@ -278,7 +278,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					for _, errOut := range method.ErrorOutputs() {
 						group.If(jen.Id(errOut.Name).Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
 							g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("invoke returned error:"), jen.Id(errOut.Name))
-							g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Lit(params.CustomErrCode), jen.Id(errOut.Name).Dot("Error").Call())
+							g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Lit(params.CustomErrCode), makeErrorMap(jen.Id(errOut.Name).Dot("Error").Call()))
 							g.Return()
 						})
 					}
@@ -484,6 +484,12 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 	}
 	result.Wrapper = buffer.String()
 	return result, nil
+}
+
+func makeErrorMap(err jen.Code) jen.Code {
+	return jen.Map(jen.String()).Interface().ValuesFunc(func(group *jen.Group) {
+		group.Lit("error").Op(":").Add(err)
+	})
 }
 
 func toKebab(v string) string {
