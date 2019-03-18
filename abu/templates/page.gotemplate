@@ -57,24 +57,20 @@
             <tr class="d-flex">
                 <th class="col-md-4 col-lg-2">{{$field}}</th>
                 <td>
-                    {{with shim $index}}
-                        {{.}}
+                    {{- if ($index | isByteArray)}}
+                        {{(print "with ." (index  $.Fields $index)) | gtpl}}<a
+                        href="data:text/plain;base64,{{"{{. | b64}}"}}"
+                        download="{{$field}}">download</a>{{$end}}
                     {{else}}
-                        {{- if ($index | isByteArray)}}
-                            {{(print "with ." (index  $.Fields $index)) | gtpl}}<a
-                            href="data:text/plain;base64,{{"{{. | b64}}"}}"
-                            download="{{$field}}">download</a>{{$end}}
-                        {{else}}
-                            {{with (index $.Params.ItemLink (index  $.Fields $index) )}}
-                                {{(print "with ." (index  $.Fields $index)) | gtpl}}
-                                <a href="{{.}}">
-                                    {{- $end}}
-                                    {{"{{"}}.{{index $.Fields $index}}{{"}}"}}
-                                </a>
+                        {{with (index $.Params.ItemLink (index  $.Fields $index) )}}
+                            {{(print "with ." (index  $.Fields $index)) | gtpl}}
+                            <a href="{{.}}">
+                                {{- $end}}
+                                {{$index | display}}
+                            </a>
 
-                            {{else}}
-                                {{"{{"}}.{{index $.Fields $index}}{{"}}"}}
-                            {{end}}
+                        {{else}}
+                            {{$index | display}}
                         {{end}}
                     {{end}}
                 </td>

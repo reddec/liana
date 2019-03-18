@@ -177,6 +177,18 @@ func (c *Common) prepare(args []string, defaultTemplate string, shims []*Shim) (
 		}
 		return ""
 	}
+	funcs["display"] = func(fieldIndex int) string {
+		sm := fieldTypes[fieldIndex]
+		if sm.BuiltIn {
+			return "{{." + fieldsRender[fieldIndex] + "}}"
+		}
+		for _, sh := range shims {
+			if sm.Name == sh.Type && sm.Import.Package == sh.Package {
+				return "{{with ." + fieldsRender[fieldIndex] + "}}" + sh.Render + "{{end}}"
+			}
+		}
+		return "{{." + fieldsRender[fieldIndex] + "}}"
+	}
 
 	var templ = template.New("").Funcs(funcs)
 	if c.TemplatePath != "" {
