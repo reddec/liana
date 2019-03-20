@@ -126,7 +126,7 @@ func parseFormIntField(errCaption, name string, bits int) jen.Code {
 	cast := fmt.Sprint("int", bits)
 	return jen.Var().Id(name).Id(cast).Line().IfFunc(func(condition *jen.Group) {
 		condition.List(jen.Id("v"), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(bits))
-		condition.Err().Op("!=").Nil()
+		condition.Err().Op("==").Nil()
 	}).BlockFunc(func(ok *jen.Group) {
 		ok.Id(name).Op("=").Id(cast).Call(jen.Id("v"))
 	}).Else().BlockFunc(func(notParsed *jen.Group) {
