@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"github.com/dave/jennifer/jen"
 	"github.com/reddec/symbols"
 	"go/ast"
@@ -122,8 +123,13 @@ func FormParser(fieldNames []string, fieldTypes []*symbols.Symbol, fields []*sym
 }
 
 func parseFormIntField(errCaption, name string, bits int) jen.Code {
-	return jen.List(jen.Id(name), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(bits)).Line().
-		If(jen.Err().Op("!=").Nil()).BlockFunc(func(notParsed *jen.Group) {
+	cast := fmt.Sprint("int", bits)
+	return jen.Var().Id(name).Id(cast).Line().IfFunc(func(condition *jen.Group) {
+		condition.List(jen.Id("v"), jen.Err()).Op(":=").Qual("strconv", "ParseInt").Call(jen.Id("rq").Dot("FormValue").Call(jen.Lit(name)), jen.Lit(10), jen.Lit(bits))
+		condition.Err().Op("!=").Nil()
+	}).BlockFunc(func(ok *jen.Group) {
+		ok.Id(name).Op("=").Id(cast).Call(jen.Id("v"))
+	}).Else().BlockFunc(func(notParsed *jen.Group) {
 		notParsed.Qual("log", "Println").Call(jen.Lit("["+errCaption+"]"), jen.Lit(name), jen.Err())
 		notParsed.Id("errorsText").Op("=").Append(jen.Id("errorsText"), jen.Lit(name+": ").Op("+").Err().Dot("Error").Call())
 	})
