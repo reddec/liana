@@ -223,7 +223,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 						})
 					}
 				}
-				group.Id("ctx").Op(":=").Qual("context", "WithValue").Call(jen.Qual("context", "Background").Call(), jen.Lit("method"), jen.Lit(method.Name))
+				group.Id("ctx").Op(":=").Qual("context", "WithValue").Call(jen.Qual("context", "WithValue").Call(jen.Qual("context", "Background").Call(), jen.Lit("method"), jen.Lit(method.Name)), jen.Lit("gctx"), jen.Id("gctx"))
 
 				if authRequired {
 					group.IfFunc(func(ifLogin *jen.Group) {
