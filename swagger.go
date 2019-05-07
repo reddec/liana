@@ -22,6 +22,7 @@ type swaggerGen struct {
 	EmbeddedURL    string
 	BypassContext  bool
 	WrapperParams  WrapperParams
+	Version        string
 }
 
 func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.Interface, exportedMethods []*atool.Method) types.Swagger {
@@ -34,7 +35,7 @@ func (usn *swaggerGen) generateSwaggerDefinition(file *atool.File, iface *atool.
 	}
 	sw.Info.Title = iface.Name
 	sw.Info.Description = strings.TrimSpace(iface.Comment)
-	sw.Info.Version = "1.0"
+	sw.Info.Version = usn.Version
 
 	sw.Paths = make(map[string]types.Path)
 	sw.Definitions = make(map[string]*types.Definition)

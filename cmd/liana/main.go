@@ -40,6 +40,7 @@ var (
 	useValidator       = flag.Bool("validator", false, "Use Validate function on request objects")
 	requiredByComment  = flag.String("swagger-required-by-comment", "", "Mark fields in a swagger as required if their comments contain specified keyword")
 	exportLogin        = flag.Bool("export-login", false, "Export Login function")
+	version            = flag.String("swagger-version", "1.0", "swagger version field")
 )
 
 func main() {
@@ -100,6 +101,7 @@ func main() {
 		RequiredByComment:  *requiredByComment,
 		OptionalAuth:       stringToList(*OptionalAuths),
 		ExportLogin:        *exportLogin,
+		Version:            *version,
 	})
 	if err != nil {
 		panic(err)

@@ -41,6 +41,7 @@ type WrapperParams struct {
 	UseValidator        bool              // optional, use method Validate() error to check requests
 	RequiredByComment   string            // optional, mark fields as required in swagger if they contain specified keyword
 	ExportLogin         bool              // optional, export login function
+	Version             string            // optional, swagger version field
 }
 
 // Result of generator
@@ -371,6 +372,7 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 				EmbeddedURL:    params.EmbeddedSwaggerURL,
 				BypassContext:  params.BypassContext,
 				WrapperParams:  params,
+				Version:        params.Version,
 			}
 			sw := usn.generateSwaggerDefinition(f, ifs, wrappedMethods)
 			result.Swaggers[ifs.Name] = &sw
