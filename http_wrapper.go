@@ -42,6 +42,7 @@ type WrapperParams struct {
 	RequiredByComment   string            // optional, mark fields as required in swagger if they contain specified keyword
 	ExportLogin         bool              // optional, export login function
 	Version             string            // optional, swagger version field
+	CustomError         bool              // optional, custom error mapper
 }
 
 // Result of generator
@@ -111,6 +112,10 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		}
 		if params.CustomMarshaller {
 			out.Type().Id("Marshaller" + ifs.Name).Func().Params(jen.Interface()).Parens(jen.List(jen.Index().Byte(), jen.Error()))
+		}
+
+		if params.CustomError {
+			out.Type().Id("Error" + ifs.Name + "Handler").Func().Params(jen.Error()).Interface()
 		}
 
 		var numAuthMethods int
@@ -190,7 +195,11 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					group.List(jen.Id("body"), jen.Err()).Op(":=").Id("gctx").Dot("GetRawData").Call()
 					group.If(jen.Err().Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
 						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed read body:"), jen.Err())
-						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
+						if params.CustomError {
+							g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Id("h").Dot("errorHandler").Call(jen.Err()))
+						} else {
+							g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
+						}
 						g.Return()
 					})
 				}
@@ -201,7 +210,11 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 						ifG.Err().Op("!=").Nil()
 					}).BlockFunc(func(g *jen.Group) {
 						g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("failed to parse arguments:"), jen.Err())
-						g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
+						if params.CustomError {
+							g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Id("h").Dot("errorHandler").Call(jen.Err()))
+						} else {
+							g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
+						}
 						g.Return()
 					})
 				}
@@ -219,7 +232,11 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 							valid.Err().Op("!=").Nil()
 						}).BlockFunc(func(notValid *jen.Group) {
 							notValid.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("validation failed:"), jen.Err())
-							notValid.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
+							if params.CustomError {
+								notValid.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Id("h").Dot("errorHandler").Call(jen.Err()))
+							} else {
+								notValid.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), makeErrorMap(jen.Err().Dot("Error").Call()))
+							}
 							notValid.Return()
 						})
 					}
@@ -279,7 +296,11 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 					for _, errOut := range method.ErrorOutputs() {
 						group.If(jen.Id(errOut.Name).Op("!=").Nil()).BlockFunc(func(g *jen.Group) {
 							g.Qual("log", "Println").Call(jen.Lit("["+method.Name+"]"), jen.Lit("invoke returned error:"), jen.Id(errOut.Name))
-							g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Lit(params.CustomErrCode), makeErrorMap(jen.Id(errOut.Name).Dot("Error").Call()))
+							if params.CustomError {
+								g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Qual("net/http", "StatusBadRequest"), jen.Id("h").Dot("errorHandler").Call(jen.Id(errOut.Name)))
+							} else {
+								g.Id("gctx").Dot("AbortWithStatusJSON").Call(jen.Lit(params.CustomErrCode), makeErrorMap(jen.Id(errOut.Name).Dot("Error").Call()))
+							}
 							g.Return()
 						})
 					}
@@ -320,6 +341,9 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		if params.CustomMarshaller {
 			ifStructDef.Id("marshaller").Id("Marshaller" + ifs.Name)
 		}
+		if params.CustomError {
+			ifStructDef.Id("errorHandler").Id("Error" + ifs.Name + "Handler")
+		}
 		out.Line()
 		// Gin wrapper
 		comment := "Wrapper of " + f.Package + "." + ifs.Name + " that expose functions over simple JSON HTTP interface.\n Those methods are wrapped: "
@@ -359,6 +383,10 @@ func GenerateInterfacesWrapperHTTP(params WrapperParams) (GenerateResult, error)
 		if params.CustomMarshaller {
 			subParams.Id("marshaller").Id("Marshaller" + ifs.Name)
 			subCall.Id("marshaller")
+		}
+		if params.CustomError {
+			subParams.Id("errorHandler").Id("Error" + ifs.Name + "Handler")
+			subCall.Id("errorHandler")
 		}
 
 		if !params.DisableSwagger {

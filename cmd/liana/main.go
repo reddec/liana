@@ -37,6 +37,7 @@ var (
 	ErrCode            = flag.Int("err-code", http.StatusBadGateway, "Custom http error code")
 	preProcessor       = flag.Bool("pre", false, "Use pre-handler processor")
 	customMarshaller   = flag.Bool("custom-json", false, "Use custom json marshaller")
+	customError        = flag.Bool("custom-error", false, "Use custom error handler")
 	useValidator       = flag.Bool("validator", false, "Use Validate function on request objects")
 	requiredByComment  = flag.String("swagger-required-by-comment", "", "Mark fields in a swagger as required if their comments contain specified keyword")
 	exportLogin        = flag.Bool("export-login", false, "Export Login function")
@@ -102,6 +103,7 @@ func main() {
 		OptionalAuth:       stringToList(*OptionalAuths),
 		ExportLogin:        *exportLogin,
 		Version:            *version,
+		CustomError:        *customError,
 	})
 	if err != nil {
 		panic(err)
